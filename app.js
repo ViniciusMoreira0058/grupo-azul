@@ -5,8 +5,8 @@
    (Project Settings → API). Use só a chave anon/publishable.
    Com SUPABASE_URL vazio o app abre em modo demonstração.
    ===================================================================== */
-const SUPABASE_URL = "";
-const SUPABASE_KEY = "";
+const SUPABASE_URL = "https://ywswnutpvujkditmndmx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_9-MH99CiuzmvMR6K5vK4vg_IzqTjsLk";
 
 // dados que saem no rodapé do PDF do orçamento
 const EMPRESA = {
@@ -17,7 +17,7 @@ const EMPRESA = {
   validade: 15
 };
 
-const DEMO = !SUPABASE_URL || new URLSearchParams(location.search).has("demo");
+const DEMO = !SUPABASE_URL || !SUPABASE_KEY || new URLSearchParams(location.search).has("demo");
 const sb = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const BUCKET = "ga-arquivos";
 const LOGO_DARK = "assets/logo-dark.png";
