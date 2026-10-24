@@ -302,6 +302,10 @@ body.busy::after{content:"";position:fixed;left:0;right:0;top:0;height:3px;z-ind
   #printRoot .paper{min-width:0;box-shadow:none;border-radius:0}
   #printRoot *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+.mapa{display:grid;gap:8px;margin:14px 0 4px}
+.mapa iframe{width:100%;height:200px;border:1px solid var(--line);border-radius:12px;display:block;background:var(--surface-2)}
+.mapa-btns{display:flex;gap:8px;flex-wrap:wrap}
+a.btn{text-decoration:none}
 /* ---- tela de carregamento: chave de boca apertando o cano ---- */
 #splash{position:fixed;inset:0;z-index:200;isolation:isolate;overflow:hidden;display:grid;place-items:center;background:var(--bg);transition:opacity .4s ease}
 #splash.out{opacity:0;pointer-events:none}

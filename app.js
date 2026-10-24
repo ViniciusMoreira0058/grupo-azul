@@ -379,6 +379,9 @@ function fbRate(e) {
   mine.forEach(o => o.log.forEach(l => { if (l.who === e.id && l.d >= addDays(HOJE, -29)) sent.add(l.d) }));
   return days ? Math.min(100, Math.round(sent.size / days * 100)) : null;
 }
+// mapa da obra sem chave de API: incorporação do Google Maps + rota no Google Maps ou Waze
+const mapaObra = o => o.addr ? `<div class="mapa"><iframe src="https://maps.google.com/maps?q=${encodeURIComponent(o.addr)}&z=16&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Mapa da obra"></iframe>
+ <div class="mapa-btns"><a class="btn sm primary" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(o.addr)}" target="_blank" rel="noopener">Ir com Google Maps</a><a class="btn sm" href="https://waze.com/ul?q=${encodeURIComponent(o.addr)}&navigate=yes" target="_blank" rel="noopener">Ir com Waze</a></div></div>` : "";
 const thumbs = fotos => (fotos || []).map(p => fotoUrl(p)).filter(Boolean).map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(u)}" alt="Foto do feedback" loading="lazy"></a>`).join("");
 
 /* =====================================================================
@@ -734,6 +737,7 @@ function obraCardTec(o) {
   <div class="card-head" style="align-items:flex-start;margin-bottom:10px"><div style="min-width:0"><div class="eyebrow">${o.resp === me.id ? "Você é o responsável" : "Responsável: " + esc(emp(o.resp).name)}</div><h2 style="font-size:20px;margin-top:4px">${esc(c.name)}</h2><div style="color:var(--muted)">${esc(o.title)}</div></div>${stChip(o)}</div>
   <div class="meta" style="margin-bottom:12px">${o.addr ? `<span>📍 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.addr)}" target="_blank" rel="noopener">${esc(o.addr)}</a></span>` : ""}<span>${prazo(o)}</span></div>
   ${progLine(o)}
+  ${mapaObra(o)}
   ${o.notes ? `<div class="note"><b>Recado do escritório:</b> ${esc(o.notes)}</div>` : ""}
   <div class="obra-cols">
    <div><div class="eyebrow" style="margin-bottom:6px">O que fazer</div>${o.tasks.length ? o.tasks.map((t, i) => `<label class="task"><input type="checkbox" id="t${o.id}_${i}" data-task="${o.id}:${i}" ${t[1] ? "checked" : ""}><span>${esc(t[0])}</span></label>`).join("") : '<p class="s" style="margin:0">O escritório ainda não listou as etapas.</p>'}</div>
@@ -818,6 +822,7 @@ function obraDetail(o) {
  <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div>${esc(o.title)}<div class="s">${esc(o.addr)}</div></div>${stChip(o)}</div>
  ${progLine(o)}
  <div class="s">Responsável: <b style="color:var(--fg)">${esc(emp(o.resp).name)}</b> · Equipe: ${o.team.map(id => esc(emp(id).name)).join(", ") || "—"} · ${fd(o.start)} a ${fd(o.end)}</div>
+ ${mapaObra(o)}
  ${o.notes ? `<div class="note" style="margin:0"><b>Recado:</b> ${esc(o.notes)}</div>` : ""}
  <div><div class="eyebrow" style="margin-bottom:6px">Etapas</div>${o.tasks.map(t => `<div class="task"><span class="tick ${t[1] ? "on" : ""}">${t[1] ? "✓" : ""}</span><span>${esc(t[0])}</span></div>`).join("") || '<p class="s" style="margin:0">Sem etapas.</p>'}</div>
  <div><div class="eyebrow" style="margin-bottom:8px">Feedbacks da equipe</div>${o.log.length ? o.log.slice(0, 30).map(l => `<div class="log"><div><b>${fd(l.d)}</b> · ${esc(emp(l.who).name)} · <span class="num">${l.pct}%</span></div><div>${esc(l.text)}</div>${l.problem ? `<div class="down" style="font-size:13px">⚠ ${esc(l.problem)}</div>` : ""}${l.fotos && l.fotos.length ? `<div class="thumbs">${thumbs(l.fotos)}</div>` : ""}</div>`).join("") : `<p class="s" style="margin:0">Nenhum feedback ainda.</p>`}</div>
