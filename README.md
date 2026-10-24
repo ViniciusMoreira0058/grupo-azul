@@ -18,7 +18,7 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 
 ## Colocar no ar
 
-1. **Supabase**: crie um projeto novo (plano Free). No `supabase/schema.sql`, troque `TROQUE-PELO-EMAIL-DO-DONO@exemplo.com` (seção 9, no fim) pelo e-mail do dono. Depois vá em **SQL Editor → New query**, cole o arquivo inteiro e clique em **Run**.
+1. **Supabase**: crie um projeto novo (plano Free). A seção 9 do `supabase/schema.sql` (no fim) já cadastra `barbeariavm0058@gmail.com` como conta principal (troque se for outro). Vá em **SQL Editor → New query**, cole o arquivo inteiro e clique em **Run**.
 2. **app.js**: preencha `SUPABASE_URL` e `SUPABASE_KEY` nas primeiras linhas. O URL fica em **Connect** (botão no alto) ou é `https://<código-do-projeto>.supabase.co`. Use a chave **anon / publishable**. Nunca coloque a *service_role / secret key*.
    No mesmo lugar, ajuste o bloco `EMPRESA` (contato, pagamento e garantia que saem no PDF do orçamento).
 3. **Vercel**: **Add New → Project** → importe este repositório → **Deploy**. Não precisa configurar nada.

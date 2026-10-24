@@ -346,9 +346,9 @@ create policy ga_arquivos_apagar on storage.objects for delete to authenticated
   using (bucket_id = 'ga-arquivos' and public.ga_acesso() = 'admin');
 
 -- ---------------------------------------------------------------------
--- 9. DONO (troque o nome e o e-mail abaixo antes de rodar)
+-- 9. DONO (conta principal; troque se for outra pessoa)
 --    Depois ele entra no app em "Primeiro acesso" com esse e-mail e cria a senha.
 -- ---------------------------------------------------------------------
 insert into public.ga_equipe (nome, funcao, email, acesso, dono)
-select 'Dono', 'Dono', 'TROQUE-PELO-EMAIL-DO-DONO@exemplo.com', 'admin', true
+select 'Vinicius Moreira', 'Administrador', 'barbeariavm0058@gmail.com', 'admin', true
 where not exists (select 1 from public.ga_equipe where dono);
