@@ -260,7 +260,7 @@ const ICON = {
   est: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/>',
   os: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>'
 };
-const PAGES = [["dash", "Painel"], ["obr", "Obras"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"]];
+const PAGES = [["dash", "Dashboard"], ["obr", "Obras"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"]];
 const ALLOWED = { admin: PAGES.map(p => p[0]), fin: ["dash", "cli", "orc", "fin", "rel"], tec: ["obr"] };
 const SOON = [["est", "Estoque"], ["os", "Ordens de serviço"]];
 const can = p => ALLOWED[me.role].includes(p);
@@ -378,7 +378,7 @@ const thumbs = fotos => (fotos || []).map(p => fotoUrl(p)).filter(Boolean).map(u
    ===================================================================== */
 const VIEWS = {};
 
-/* ---------- Painel ---------- */
+/* ---------- Dashboard ---------- */
 VIEWS.dash = () => {
   const months = lastMonths(6), sumM = (k, t) => lanc.filter(l => l.paid && l.type === t && l.d.startsWith(k)).reduce((s, l) => s + l.v, 0);
   const IN = months.map(k => sumM(k, "in")), OUT = months.map(k => sumM(k, "out"));

@@ -11,7 +11,7 @@ Abrindo `index.html` sem preencher o Supabase (ou com `?demo=1` no endereço), o
 | Perfil | O que vê |
 |---|---|
 | **Administrador** (o dono e quem ele quiser) | Tudo |
-| **Financeiro** | Painel, clientes, orçamentos, financeiro e relatórios. Não edita obras nem a equipe |
+| **Financeiro** | Dashboard, clientes, orçamentos, financeiro e relatórios. Não edita obras nem a equipe |
 | **Funcionário** | Só a aba **Obras**, e só as obras em que está: etapas, prazo, feedback do dia com fotos e pedido de material |
 
 O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
