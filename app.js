@@ -205,7 +205,7 @@ $("#authBack").onclick = () => setAuthMode("login");
 
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
-  if (DEMO) { loadDemo(); const p = staff.find(s => s.access === demoRole && s.active); me = { id: p.id, name: p.name, ini: p.ini, role: demoRole, funcao: p.role, dono: !!p.dono }; enterApp(); return }
+  if (DEMO) { splashShow(); loadDemo(); const p = staff.find(s => s.access === demoRole && s.active); me = { id: p.id, name: p.name, ini: p.ini, role: demoRole, funcao: p.role, dono: !!p.dono }; enterApp(); splashHide(); return }
   const email = $("#lgEmail").value.trim().toLowerCase(), pass = $("#lgPass").value, pass2 = $("#lgPass2").value;
   const btn = $("#authGo"); btn.disabled = true; authMsg("");
   try {
@@ -232,8 +232,16 @@ $("#loginForm").addEventListener("submit", async e => {
   finally { btn.disabled = false }
 });
 
+/* ---------- tela de carregamento ---------- */
+const SPLASH_MIN = 1600; let splashAt = performance.now(), splashTok = 0;
+function splashShow() { splashTok++; splashAt = performance.now(); const s = $("#splash"); s.hidden = false; s.classList.remove("out") }
+function splashHide() {
+  const t = splashTok, wait = Math.max(0, SPLASH_MIN - (performance.now() - splashAt));
+  setTimeout(() => { if (t !== splashTok) return; const s = $("#splash"); s.classList.add("out"); setTimeout(() => { if (t === splashTok) s.hidden = true }, 420) }, wait);
+}
+
 async function start() {
-  if (starting || me) return; starting = true;
+  if (starting || me) return; starting = true; splashShow();
   try {
     const p = await live(sb.rpc("ga_vincular"));
     if (!p) { await sb.auth.signOut(); showLogin(); authMsg("Seu e-mail ainda não está cadastrado na equipe do Grupo Azul. Peça ao escritório para cadastrar você e tente de novo.", true); return }
@@ -241,7 +249,7 @@ async function start() {
     me = { id: p.id, name: p.nome, ini: initials(p.nome), role: p.acesso, funcao: p.funcao, dono: p.dono };
     busy(true); await reload(); enterApp();
   } catch (e) { console.error(e); showLogin(); authMsg("Não foi possível entrar. " + friendly(e), true) }
-  finally { starting = false; busyN = 0; busy(false) }
+  finally { starting = false; busyN = 0; busy(false); splashHide() }
 }
 
 $("#logoutBtn").onclick = async () => { if (!DEMO) await sb.auth.signOut(); showLogin(); setAuthMode("login") };
@@ -916,12 +924,13 @@ $("#login").addEventListener("pointermove", e => { if (reduced()) return; const 
 
 /* ---------- início ---------- */
 setAuthMode("login"); showLogin();
+if (DEMO) splashHide();
 if (!DEMO) {
   sb.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { setAuthMode("newpass"); return }
     if (ev === "SIGNED_IN" && session && !me && authMode !== "newpass") setTimeout(start, 0);
     if (ev === "SIGNED_OUT" && me) showLogin();
   });
-  sb.auth.getSession().then(({ data }) => { if (data.session && authMode !== "newpass" && !location.hash.includes("type=recovery")) start() });
+  sb.auth.getSession().then(({ data }) => { if (data.session && authMode !== "newpass" && !location.hash.includes("type=recovery")) start(); else splashHide() }).catch(splashHide);
 }
 if ("serviceWorker" in navigator && !DEMO) { /* sem cache offline por enquanto: o app sempre busca a versão mais nova */ }
