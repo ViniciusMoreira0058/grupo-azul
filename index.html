@@ -303,9 +303,9 @@ body.busy::after{content:"";position:fixed;left:0;right:0;top:0;height:3px;z-ind
   #printRoot *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 /* ---- tela de carregamento: chave de boca apertando o cano ---- */
-#splash{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:var(--bg);transition:opacity .4s ease}
+#splash{position:fixed;inset:0;z-index:200;isolation:isolate;overflow:hidden;display:grid;place-items:center;background:var(--bg);transition:opacity .4s ease}
 #splash.out{opacity:0;pointer-events:none}
-#splash .sp{display:grid;justify-items:center;gap:14px;padding:16px}
+#splash .sp{display:grid;justify-items:center;gap:14px;padding:22px 26px 20px;border-radius:22px;background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 #splash svg{width:min(240px,62vw);height:auto;overflow:visible}
 #splash .sp img{width:min(190px,50vw)}
 #splash .pipe{fill:var(--surface-2);stroke:var(--accent-2);stroke-width:2.5}
@@ -322,6 +322,7 @@ body.busy::after{content:"";position:fixed;left:0;right:0;top:0;height:3px;z-ind
 </head>
 <body>
 <div id="splash" role="status" aria-label="Carregando o app">
+  <div class="scene" aria-hidden="true"><div class="rig"><div class="plane ceil bp-tile"></div><div class="plane floor bp-tile"></div></div></div>
   <div class="sp">
     <svg viewBox="0 0 240 200" aria-hidden="true">
       <defs><linearGradient id="spGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a7bd5"/><stop offset="1" stop-color="#5aaee6"/></linearGradient></defs>
