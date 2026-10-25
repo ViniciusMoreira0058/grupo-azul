@@ -629,27 +629,30 @@ const lateL = l => !l.paid && l.d < HOJE;
 const sitL = l => l.paid ? (l.type === "in" ? "Recebido" : "Pago") : lateL(l) ? "Atrasado" : (l.type === "in" ? "A receber" : "A pagar");
 let finTab = "all", finQ = "", editId = null, finType = "in", finMonth = HOJE.slice(0, 7);
 VIEWS.fin = () => {
-  const inMonth = l => l.d.startsWith(finMonth);
+  const FP = PER_V2 ? periodo("fin") : null;
+  const inMonth = l => FP ? l.d >= FP.de && l.d <= FP.ate : l.d.startsWith(finMonth);
   const paidM = lanc.filter(l => l.paid && inMonth(l)), inM = paidM.filter(l => l.type === "in").reduce((s, l) => s + l.v, 0), outM = paidM.filter(l => l.type === "out").reduce((s, l) => s + l.v, 0);
   const rec = lanc.filter(l => !l.paid && l.type === "in").reduce((s, l) => s + l.v, 0), pay = lanc.filter(l => !l.paid && l.type === "out").reduce((s, l) => s + l.v, 0);
   const saldo = (DEMO ? 25000 : 0) + lanc.filter(l => l.paid).reduce((s, l) => s + (l.type === "in" ? l.v : -l.v), 0);
   const cats = CATS.out.map(c => [c, paidM.filter(l => l.type === "out" && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), cmax = Math.max(1, ...cats.map(c => c[1]));
-  const mName = mesNome(finMonth + "-01");
-  $("#main").innerHTML = head("Financeiro", "Lance tudo o que entra e sai do caixa", `<div class="month-nav"><button class="btn sm" id="fmPrev" aria-label="Mês anterior">‹</button><b>${mName}</b><button class="btn sm" id="fmNext" aria-label="Próximo mês">›</button></div>`) + `
+  const mName = FP ? FP.nome : mesNome(finMonth + "-01"), noP = FP ? "no período" : "no mês";
+  $("#main").innerHTML = head("Financeiro", "Lance tudo o que entra e sai do caixa", FP ? "" : `<div class="month-nav"><button class="btn sm" id="fmPrev" aria-label="Mês anterior">‹</button><b>${mName}</b><button class="btn sm" id="fmNext" aria-label="Próximo mês">›</button></div>`) + `${FP ? periodBar("fin", VIEWS.fin) : ""}
  <div class="grid kpis" style="margin-bottom:14px">
   <div class="card kpi"><div class="eyebrow">Saldo em caixa</div><div class="v num ${saldo < 0 ? "down" : ""}">${brl0(saldo)}</div><div class="d">Tudo o que já entrou menos o que já saiu</div></div>
-  <div class="card kpi"><div class="eyebrow">Entrou no mês</div><div class="v num up">${brl0(inM)}</div><div class="d">${paidM.filter(l => l.type === "in").length} lançamentos</div></div>
-  <div class="card kpi"><div class="eyebrow">Saiu no mês</div><div class="v num">${brl0(outM)}</div><div class="d">${paidM.filter(l => l.type === "out").length} lançamentos</div></div>
-  <div class="card kpi"><div class="eyebrow">Resultado do mês</div><div class="v num ${inM - outM >= 0 ? "up" : "down"}">${brl0(inM - outM)}</div><div class="d">A receber ${brl0(rec)} · a pagar ${brl0(pay)}</div></div>
+  <div class="card kpi"><div class="eyebrow">Entrou ${noP}</div><div class="v num up">${brl0(inM)}</div><div class="d">${paidM.filter(l => l.type === "in").length} lançamentos</div></div>
+  <div class="card kpi"><div class="eyebrow">Saiu ${noP}</div><div class="v num">${brl0(outM)}</div><div class="d">${paidM.filter(l => l.type === "out").length} lançamentos</div></div>
+  <div class="card kpi"><div class="eyebrow">Resultado ${FP ? "do período" : "do mês"}</div><div class="v num ${inM - outM >= 0 ? "up" : "down"}">${brl0(inM - outM)}</div><div class="d">A receber ${brl0(rec)} · a pagar ${brl0(pay)}</div></div>
  </div>
  <div class="grid two">
   <form class="card lanc-form" id="lf" autocomplete="off"></form>
   <div class="card"><div class="card-head"><h2>Saídas por categoria</h2><span class="s">${mName}</span></div><div class="grid" style="gap:12px">${cats.map(c => `<div><div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span>${c[0]}</span><b class="num">${brl0(c[1])}</b></div><div class="bar"><i style="width:${c[1] / cmax * 100}%"></i></div></div>`).join("") || '<p class="s" style="margin:0">Nenhuma saída paga neste mês.</p>'}</div></div>
  </div>
- <div class="toolbar" style="margin-top:18px"><div class="tabs" id="fTabs">${[["all", "Do mês"], ["in", "Entradas"], ["out", "Saídas"], ["rec", "A receber"], ["pay", "A pagar"]].map(([k, l]) => `<button type="button" data-t="${k}" class="${k === finTab ? "active" : ""}">${l}</button>`).join("")}</div><input class="input" id="fSearch" placeholder="Buscar descrição, cliente ou fornecedor" value="${esc(finQ)}"><button class="btn sm" id="fCsv">Baixar planilha</button></div>
+ <div class="toolbar" style="margin-top:18px"><div class="tabs" id="fTabs">${[["all", PER_V2 ? "Do período" : "Do mês"], ["in", "Entradas"], ["out", "Saídas"], ["rec", "A receber"], ["pay", "A pagar"]].map(([k, l]) => `<button type="button" data-t="${k}" class="${k === finTab ? "active" : ""}">${l}</button>`).join("")}</div><input class="input" id="fSearch" placeholder="Buscar descrição, cliente ou fornecedor" value="${esc(finQ)}"><button class="btn sm" id="fCsv">Baixar planilha</button></div>
  <div class="card"><div class="table-wrap" id="fTable"></div></div>`;
-  $("#fmPrev").onclick = () => { finMonth = addMonths(finMonth + "-01", -1).slice(0, 7); VIEWS.fin() };
-  $("#fmNext").onclick = () => { finMonth = addMonths(finMonth + "-01", 1).slice(0, 7); VIEWS.fin() };
+  if (!FP) {
+    $("#fmPrev").onclick = () => { finMonth = addMonths(finMonth + "-01", -1).slice(0, 7); VIEWS.fin() };
+    $("#fmNext").onclick = () => { finMonth = addMonths(finMonth + "-01", 1).slice(0, 7); VIEWS.fin() };
+  }
   drawLancForm(); drawLancTable();
   $$("#fTabs button").forEach(b => b.onclick = () => { finTab = b.dataset.t; $$("#fTabs button").forEach(x => x.classList.toggle("active", x === b)); drawLancTable() });
   $("#fSearch").oninput = () => { finQ = $("#fSearch").value; drawLancTable() };
@@ -706,7 +709,7 @@ function drawLancForm() {
 }
 function lancList() {
   const q = finQ.toLowerCase(), pendTab = finTab === "rec" || finTab === "pay";
-  return lanc.filter(l => pendTab ? !l.paid && l.type === (finTab === "rec" ? "in" : "out") : l.d.startsWith(finMonth) && (finTab === "all" || l.type === finTab))
+  return lanc.filter(l => pendTab ? !l.paid && l.type === (finTab === "rec" ? "in" : "out") : (PER_V2 ? (({ de, ate }) => l.d >= de && l.d <= ate)(periodo("fin")) : l.d.startsWith(finMonth)) && (finTab === "all" || l.type === finTab))
     .filter(l => (l.desc + l.who + l.cat).toLowerCase().includes(q)).sort((a, b) => pendTab ? a.d.localeCompare(b.d) : b.d.localeCompare(a.d));
 }
 let confirmDel = null;
@@ -729,7 +732,7 @@ function exportCsv(list) {
   const rows = [["Data", "Tipo", "Descrição", "Categoria", "Cliente/Fornecedor", "Obra", "Forma", "Valor", "Situação"],
   ...list.map(l => { const o = obras.find(x => x.id === l.obra); return [fd(l.d), l.type === "in" ? "Entrada" : "Saída", l.desc, l.cat, l.who, o ? clientById(o.client).name : "", l.pay, (l.type === "in" ? l.v : -l.v).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), sitL(l)] })];
   const blob = new Blob(["﻿" + rows.map(r => r.map(q).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `financeiro-${finMonth}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = PER_V2 ? `financeiro-${periodo("fin").de}-a-${periodo("fin").ate}.csv` : `financeiro-${finMonth}.csv`; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
@@ -767,10 +770,36 @@ function viewRelOld() {
  </div>`;
   $$("#rTabs button").forEach(b => b.onclick = () => { relN = +b.dataset.n; VIEWS.rel() });
 }
+/* ---------- Seletor de período (de um dia até outro) · por enquanto só na demonstração ---------- */
+const PER_V2 = DEMO;
+const PER_ATALHOS = [["hoje", "Hoje"], ["7d", "7 dias"], ["mes", "Este mês"], ["ant", "Mês passado"], ["3m", "3 meses"], ["ano", "Este ano"], ["tudo", "Tudo"]];
+const PER = { fin: { k: "mes" }, obras: { k: "tudo" }, rfin: { k: "mes" }, lucro: { k: "tudo" }, equipe: { k: "ano" } };
+function periodo(key) {
+  const st = PER[key], m0 = HOJE.slice(0, 8) + "01";
+  const ini = [...lanc.map(l => l.d), ...obras.map(o => o.start), ...quotes.map(q => q.date)].reduce((m, d) => d && d < m ? d : m, HOJE);
+  const A = { hoje: [HOJE, HOJE], "7d": [addDays(HOJE, -6), HOJE], mes: [m0, HOJE], ant: [addMonths(m0, -1), addDays(m0, -1)], "3m": [addMonths(m0, -2), HOJE], ano: [HOJE.slice(0, 4) + "-01-01", HOJE], tudo: [ini, HOJE] };
+  const [de, ate] = st.k === "livre" ? [st.de, st.ate] : A[st.k] || A.mes;
+  const nome = st.k === "livre" ? (de === ate ? fd(de) : `${fd(de)} a ${fd(ate)}`) : PER_ATALHOS.find(a => a[0] === st.k)[1];
+  return { de, ate, nome };
+}
+// barra: "De [data] até [data]" sempre visível + atalhos
+function periodBar(key, redraw) {
+  const { de, ate } = periodo(key), k = PER[key].k, id = "pb_" + key;
+  setTimeout(() => {
+    const box = document.getElementById(id); if (!box) return;
+    box.querySelectorAll("[data-pk]").forEach(b => b.onclick = () => { PER[key] = { k: b.dataset.pk }; redraw() });
+    const fx = () => { let a = box.querySelector(".pDe").value, b = box.querySelector(".pAte").value; if (!a || !b) return; if (a > b) [a, b] = [b, a]; PER[key] = { k: "livre", de: a, ate: b }; redraw() };
+    box.querySelector(".pDe").onchange = fx; box.querySelector(".pAte").onchange = fx;
+    const on = box.querySelector(".on"), row = box.querySelector(".p-atalhos"); if (on) row.scrollLeft = on.offsetLeft - row.offsetLeft - 40;
+  });
+  return `<div class="card period" id="${id}"><div class="p-datas"><span class="eyebrow">Período</span><label><span class="s">De</span><input class="input pDe" type="date" value="${de}" max="${HOJE}"></label><label><span class="s">até</span><input class="input pAte" type="date" value="${ate}"></label></div>
+ <div class="p-atalhos">${PER_ATALHOS.map(([pk, t]) => `<button type="button" data-pk="${pk}" class="${k === pk ? "on" : ""}">${t}</button>`).join("")}</div></div>`;
+}
+
 /* ---------- Relatórios com sub-abas (por enquanto só na demonstração) ---------- */
 const REL_V2 = DEMO;
 const REL_TABS = [["obras", "Obras finalizadas"], ["fin", "Financeiro"], ["lucro", "Lucro por obra"], ["equipe", "Equipe e orçamentos"]];
-let relTab = "obras", relBusca = "", relAno = "", relFin = "mes", relDe = "", relAte = "", relEqN = 6;
+let relTab = "obras", relBusca = "";
 VIEWS.rel = () => {
   if (!REL_V2) return viewRelOld();
   const sub = { obras: "Toque numa obra para ver o relatório completo e gerar o PDF", fin: "Entradas e saídas por período", lucro: "Quanto cada obra entregue deu de lucro", equipe: "Desempenho da equipe de campo e dos orçamentos" };
@@ -795,21 +824,21 @@ const pctTxt = v => `${Math.round(v * 100)}%`;
 /* 1. Obras finalizadas */
 function relObras(el) {
   const fin = obras.filter(o => o.pct >= 100).sort((a, b) => entregaObra(b).localeCompare(entregaObra(a)));
-  const anos = [...new Set(fin.map(o => entregaObra(o).slice(0, 4)))];
+  const P = periodo("obras");
   const t = relBusca.trim().toLowerCase();
-  const list = fin.filter(o => (!relAno || entregaObra(o).startsWith(relAno)) && (!t || (clientById(o.client).name + " " + o.title).toLowerCase().includes(t)));
+  const list = fin.filter(o => entregaObra(o) >= P.de && entregaObra(o) <= P.ate && (!t || (clientById(o.client).name + " " + o.title).toLowerCase().includes(t)));
   const noPrazo = fin.filter(o => !atrasoObra(o)).length;
-  el.innerHTML = `
+  const noPer = list.filter(o => !atrasoObra(o)).length;
+  el.innerHTML = `${periodBar("obras", () => relObras(el))}
  <div class="grid kpis" style="margin-bottom:14px">
-  <div class="card kpi"><div class="eyebrow">Obras entregues</div><div class="v num">${fin.length}</div></div>
-  <div class="card kpi"><div class="eyebrow">Entregues no prazo</div><div class="v num">${fin.length ? pctTxt(noPrazo / fin.length) : "—"}</div><div class="d">${noPrazo} de ${fin.length}</div></div>
+  <div class="card kpi"><div class="eyebrow">Obras entregues</div><div class="v num">${list.length}</div><div class="d">${P.nome}</div></div>
+  <div class="card kpi"><div class="eyebrow">Entregues no prazo</div><div class="v num">${list.length ? pctTxt(noPer / list.length) : "—"}</div><div class="d">${noPer} de ${list.length}</div></div>
  </div>
  <div class="card"><div class="card-head"><h2>Obras entregues</h2></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="input" id="rbBusca" placeholder="Buscar cliente ou serviço" value="${esc(relBusca)}" style="flex:1 1 200px"><select class="input" id="rbAno" style="width:auto"><option value="">Todos os anos</option>${anos.map(a => `<option ${a === relAno ? "selected" : ""}>${a}</option>`).join("")}</select></div>
-  <div class="list" id="rbList">${list.map(o => `<div class="row click" data-id="${o.id}"><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${esc(o.title)} · entregue em ${fd(entregaObra(o))}</div></div>${prazoChip(o)}</div>`).join("") || '<p class="s" style="margin:0">Nenhuma obra encontrada.</p>'}</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="input" id="rbBusca" placeholder="Buscar cliente ou serviço" value="${esc(relBusca)}" style="flex:1 1 200px"></div>
+  <div class="list" id="rbList">${list.map(o => `<div class="row click" data-id="${o.id}"><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${esc(o.title)} · entregue em ${fd(entregaObra(o))}</div></div>${prazoChip(o)}</div>`).join("") || '<p class="s" style="margin:0">Nenhuma obra entregue nesse período. Toque em "Tudo" para ver todas.</p>'}</div>
  </div>`;
   $("#rbBusca").oninput = e => { relBusca = e.target.value; const pos = e.target.selectionStart; relObras(el); const i = $("#rbBusca"); i.focus(); i.setSelectionRange(pos, pos) };
-  $("#rbAno").onchange = e => { relAno = e.target.value; relObras(el) };
   $$("#rbList .row").forEach(r => r.onclick = () => relatorioObra(obras.find(o => o.id === +r.dataset.id)));
 }
 function relatorioObra(o, tipo = "cliente") {
@@ -873,14 +902,8 @@ function printPaper(html, title) {
 }
 
 /* 2. Financeiro por período */
-function periodoFin() {
-  const m0 = HOJE.slice(0, 8) + "01", fimMes = k => addDays(addMonths(k, 1), -1);
-  const P = { mes: [m0, HOJE, "Este mês"], ant: [addMonths(m0, -1), addDays(m0, -1), "Mês passado"], tri: [addMonths(m0, -2), HOJE, "Últimos 3 meses"], ano: [HOJE.slice(0, 4) + "-01-01", HOJE, "Este ano"], doze: [addMonths(m0, -11), HOJE, "Últimos 12 meses"] };
-  if (relFin === "livre") return [relDe || m0, relAte || HOJE, "Período escolhido"];
-  return P[relFin] || P.mes;
-}
 function relFinanceiro(el) {
-  const [de, ate, nome] = periodoFin();
+  const { de, ate, nome } = periodo("rfin");
   const ls = lanc.filter(l => l.paid && l.d >= de && l.d <= ate).sort((a, b) => b.d.localeCompare(a.d));
   const sum = t => ls.filter(l => l.type === t).reduce((s, l) => s + l.v, 0), IN = sum("in"), OUT = sum("out");
   const pend = lanc.filter(l => !l.paid && l.d <= ate), aRec = pend.filter(l => l.type === "in").reduce((s, l) => s + l.v, 0), aPag = pend.filter(l => l.type === "out").reduce((s, l) => s + l.v, 0);
@@ -889,9 +912,8 @@ function relFinanceiro(el) {
   const cat = t => { const cs = CATS[t].map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), mx = Math.max(1, ...cs.map(c => c[1])); return cs.map(c => `<div><div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span>${c[0]}</span><b class="num">${brl0(c[1])}</b></div><div class="bar ${t === "in" ? "bar-in" : ""}"><i style="width:${c[1] / mx * 100}%"></i></div></div>`).join("") || '<p class="s" style="margin:0">Nada no período.</p>' };
   const obraNome = id => { const o = obras.find(x => x.id === id); return o ? clientById(o.client).name : "" };
   el.innerHTML = `
- <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"><div class="tabs" id="rfPer">${[["mes", "Este mês"], ["ant", "Mês passado"], ["tri", "3 meses"], ["ano", "Este ano"], ["doze", "12 meses"], ["livre", "Escolher datas"]].map(([k, t]) => `<button data-k="${k}" class="${relFin === k ? "active" : ""}">${t}</button>`).join("")}</div>
- ${relFin === "livre" ? `<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="input" type="date" id="rfDe" value="${de}" style="width:auto"><span class="s">até</span><input class="input" type="date" id="rfAte" value="${ate}" style="width:auto"></span>` : ""}
- <span style="flex:1"></span><button class="btn primary" id="rfPdf">Baixar PDF</button></div>
+ ${periodBar("rfin", () => relFinanceiro(el))}
+ <div style="display:flex;justify-content:flex-end;margin:-4px 0 14px"><button class="btn primary" id="rfPdf">Baixar PDF</button></div>
  <div class="grid kpis" style="margin-bottom:14px">
   <div class="card kpi"><div class="eyebrow">Entradas</div><div class="v num up">${brl0(IN)}</div><div class="d">${fd(de)} a ${fd(ate)}</div></div>
   <div class="card kpi"><div class="eyebrow">Saídas</div><div class="v num down">${brl0(OUT)}</div><div class="d">${ls.filter(l => l.type === "out").length} lançamentos</div></div>
@@ -905,9 +927,6 @@ function relFinanceiro(el) {
  </div>
  <div class="card" style="margin-top:14px"><div class="card-head"><h2>Lançamentos</h2><span class="s">${nome} · ${ls.length} pagos</span></div>
   <div class="list">${ls.slice(0, 60).map(l => `<div class="row"><div class="grow"><div class="t">${esc(l.desc)}</div><div class="s">${fd(l.d)} · ${esc(l.cat)}${l.obra ? " · " + esc(obraNome(l.obra)) : ""}</div></div><b class="num ${l.type === "in" ? "up" : "down"}" style="white-space:nowrap">${l.type === "in" ? "+" : "−"} ${brl(l.v)}</b></div>`).join("") || '<p class="s" style="margin:0">Nenhum lançamento pago no período.</p>'}</div>${ls.length > 60 ? `<p class="s" style="margin:8px 0 0">Mostrando os 60 mais recentes. O PDF traz todos os ${ls.length}.</p>` : ""}</div>`;
-  $$("#rfPer button").forEach(b => b.onclick = () => { if (b.dataset.k === "livre" && relFin !== "livre") { relDe = de; relAte = ate } relFin = b.dataset.k; relFinanceiro(el) });
-  const fx = () => { relDe = $("#rfDe").value; relAte = $("#rfAte").value; if (relDe && relAte && relDe <= relAte) relFinanceiro(el) };
-  if ($("#rfDe")) { $("#rfDe").onchange = fx; $("#rfAte").onchange = fx }
   $("#rfPdf").onclick = () => printPaper(finPaper(de, ate, ls, IN, OUT, obraNome), `Financeiro ${fd(de)} a ${fd(ate)}`.replace(/\//g, "-"));
 }
 function finPaper(de, ate, ls, IN, OUT, obraNome) {
@@ -928,12 +947,12 @@ function finPaper(de, ate, ls, IN, OUT, obraNome) {
 
 /* 3. Lucro por obra */
 function relLucro(el) {
-  const lista = obras.filter(o => o.pct >= 100).map(o => ({ o, k: contasObra(o) })).sort((a, b) => b.k.margem - a.k.margem);
+  const P = periodo("lucro"), lista = obras.filter(o => o.pct >= 100 && entregaObra(o) >= P.de && entregaObra(o) <= P.ate).map(o => ({ o, k: contasObra(o) })).sort((a, b) => b.k.margem - a.k.margem);
   const fin = lista, tot = fin.reduce((s, x) => s + x.k.lucro, 0), base = fin.reduce((s, x) => s + (x.k.contrato || x.k.recebido), 0);
   const best = fin[0], worst = fin[fin.length - 1];
-  el.innerHTML = `
+  el.innerHTML = `${periodBar("lucro", () => relLucro(el))}
  <div class="grid kpis" style="margin-bottom:14px">
-  <div class="card kpi"><div class="eyebrow">Lucro das obras entregues</div><div class="v num">${brl0(tot)}</div><div class="d">${fin.length} obras</div></div>
+  <div class="card kpi"><div class="eyebrow">Lucro das obras entregues</div><div class="v num">${brl0(tot)}</div><div class="d">${fin.length} obras · ${P.nome}</div></div>
   <div class="card kpi"><div class="eyebrow">Margem média</div><div class="v num">${base ? pctTxt(tot / base) : "—"}</div></div>
   <div class="card kpi"><div class="eyebrow">Melhor margem</div><div class="v num">${best ? pctTxt(best.k.margem) : "—"}</div><div class="d">${best ? esc(best.o.title) : ""}</div></div>
   <div class="card kpi"><div class="eyebrow">Menor margem</div><div class="v num">${worst ? pctTxt(worst.k.margem) : "—"}</div><div class="d">${worst ? esc(worst.o.title) : ""}</div></div>
@@ -948,28 +967,27 @@ function relLucro(el) {
 
 /* 4. Equipe e orçamentos */
 function relEquipe(el) {
-  const de = addMonths(HOJE, -relEqN);
-  const campo = staff.filter(e => e.access === "tec" && (e.active || obras.some(o => o.log.some(l => l.who === e.id && l.d >= de))));
+  const { de, ate, nome } = periodo("equipe");
+  const campo = staff.filter(e => e.access === "tec" && (e.active || obras.some(o => o.log.some(l => l.who === e.id && l.d >= de && l.d <= ate))));
   const linhas = campo.map(e => {
-    const logs = obras.flatMap(o => o.log.filter(l => l.who === e.id && l.d >= de).map(l => ({ ...l, o })));
+    const logs = obras.flatMap(o => o.log.filter(l => l.who === e.id && l.d >= de && l.d <= ate).map(l => ({ ...l, o })));
     const dias = new Set(logs.map(l => l.d)).size, obs = new Set(logs.map(l => l.o.id));
-    const entregues = obras.filter(o => o.pct >= 100 && entregaObra(o) >= de && (o.resp === e.id || o.team.includes(e.id)));
+    const entregues = obras.filter(o => o.pct >= 100 && entregaObra(o) >= de && entregaObra(o) <= ate && (o.resp === e.id || o.team.includes(e.id)));
     return { e, dias, n: logs.length, obras: obs.size, probs: logs.filter(l => l.problem).length, ent: entregues.length, noPrazo: entregues.filter(o => !atrasoObra(o)).length };
   }).sort((a, b) => b.dias - a.dias);
-  const qs = quotes.filter(q => q.date >= de), env = qs.filter(q => q.status !== "Rascunho"), ap = qs.filter(q => q.status === "Aprovado"), rc = qs.filter(q => q.status === "Recusado"), ag = qs.filter(q => q.status === "Enviado");
+  const qs = quotes.filter(q => q.date >= de && q.date <= ate), env = qs.filter(q => q.status !== "Rascunho"), ap = qs.filter(q => q.status === "Aprovado"), rc = qs.filter(q => q.status === "Recusado"), ag = qs.filter(q => q.status === "Enviado");
   const vAp = ap.reduce((s, q) => s + qTotal(q), 0);
   el.innerHTML = `
- <div class="tabs" id="reN" style="margin-bottom:14px;width:max-content">${[3, 6, 12].map(n => `<button data-n="${n}" class="${relEqN === n ? "active" : ""}">${n} meses</button>`).join("")}</div>
- <div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Equipe de campo</h2><span class="s">Últimos ${relEqN} meses, pelos feedbacks no app</span></div>
+ ${periodBar("equipe", () => relEquipe(el))}
+ <div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Equipe de campo</h2><span class="s">${nome}, pelos feedbacks no app</span></div>
   <div class="list">${linhas.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.e.name)}</div><div class="s">${esc(x.e.role)}${x.e.active ? "" : " · desligado"} · ${x.obras} ${x.obras === 1 ? "obra" : "obras"} · ${x.probs} ${x.probs === 1 ? "problema relatado" : "problemas relatados"}${x.ent ? ` · ${x.noPrazo} de ${x.ent} entregas no prazo` : ""}</div></div><div style="text-align:right"><b class="num" style="font-size:17px">${x.dias}</b><div class="s">dias</div></div></div>`).join("")}</div></div>
  <div class="grid kpis" style="margin-bottom:14px">
-  <div class="card kpi"><div class="eyebrow">Orçamentos enviados</div><div class="v num">${env.length}</div><div class="d">últimos ${relEqN} meses</div></div>
+  <div class="card kpi"><div class="eyebrow">Orçamentos enviados</div><div class="v num">${env.length}</div><div class="d">${nome}</div></div>
   <div class="card kpi"><div class="eyebrow">Taxa de aprovação</div><div class="v num">${ap.length + rc.length ? pctTxt(ap.length / (ap.length + rc.length)) : "—"}</div><div class="d">${ap.length} aprovados · ${rc.length} recusados</div></div>
   <div class="card kpi"><div class="eyebrow">Valor aprovado</div><div class="v num">${brl0(vAp)}</div><div class="d">Ticket médio ${brl0(ap.length ? vAp / ap.length : 0)}</div></div>
   <div class="card kpi"><div class="eyebrow">Aguardando resposta</div><div class="v num">${ag.length}</div><div class="d">${brl0(ag.reduce((s, q) => s + qTotal(q), 0))}</div></div>
  </div>
  ${ag.length ? `<div class="card"><div class="card-head"><h2>Orçamentos sem resposta</h2><span class="s">Vale ligar para o cliente</span></div><div class="list">${ag.sort((a, b) => a.date.localeCompare(b.date)).map(q => `<div class="row click" data-q="${q.id}"><div class="grow"><div class="t">${esc(clientById(q.client).name)}</div><div class="s">${esc(q.n)} · ${esc(q.title)} · enviado há ${diasEntre(q.date, HOJE)} dias</div></div><b class="num">${brl0(qTotal(q))}</b></div>`).join("")}</div></div>` : ""}`;
-  $$("#reN button").forEach(b => b.onclick = () => { relEqN = +b.dataset.n; relEquipe(el) });
   $$("#relBody [data-q]").forEach(r => r.onclick = () => pdfPreview(quotes.find(q => q.id === +r.dataset.q)));
 }
 
