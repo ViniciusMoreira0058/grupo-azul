@@ -9,15 +9,25 @@ const SUPABASE_URL = "https://ywswnutpvujkditmndmx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_9-MH99CiuzmvMR6K5vK4vg_IzqTjsLk";
 
 // dados que saem no rodapé do PDF do orçamento
-const EMPRESA = {
+const EMPRESA_PADRAO = {
   nome: "Grupo Azul Instalações Hidráulicas",
-  contato: "grupoazul.com.br · (11) 4000-0000 · contato@grupoazul.com.br",
+  telefone: "(11) 4000-0000",
+  email: "contato@grupoazul.com.br",
+  site: "grupoazul.com.br",
+  cnpj: "",
+  endereco: "",
   pagamento: "40% na aprovação, 30% na metade da obra e 30% na entrega. PIX ou transferência.",
   garantia: "5 anos para a instalação hidráulica. Equipamentos conforme garantia do fabricante. Teste de estanqueidade incluso.",
-  validade: 15
+  validade: 15,
+  frase: ""
 };
+const EMPRESA = { ...EMPRESA_PADRAO };
+const contatoEmpresa = () => [EMPRESA.site, EMPRESA.telefone, EMPRESA.email].filter(Boolean).join(" · ");
 
 const DEMO = !SUPABASE_URL || !SUPABASE_KEY || new URLSearchParams(location.search).has("demo");
+// edição dos dados da empresa e das observações do orçamento: por enquanto só na demonstração, aguardando aprovação
+const ORC_EXTRA = DEMO;
+if (ORC_EXTRA) { try { Object.assign(EMPRESA, JSON.parse(localStorage.getItem("ga-empresa-demo") || "{}")) } catch (e) { } }
 const sb = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const BUCKET = "ga-arquivos";
 const LOGO_DARK = "assets/logo-dark.png";
@@ -486,7 +496,7 @@ VIEWS.orc = () => {
   const sum = s => quotes.filter(q => q.status === s).reduce((t, q) => t + qTotal(q), 0), y = HOJE.slice(0, 4);
   const ap = quotes.filter(q => q.status === "Aprovado" && q.date.startsWith(y)), rc = quotes.filter(q => q.status === "Recusado" && q.date.startsWith(y));
   const list = [...quotes].sort((a, b) => b.date.localeCompare(a.date) || b.n.localeCompare(a.n));
-  $("#main").innerHTML = head("Orçamentos", "Monte o orçamento e gere o PDF com a marca do Grupo Azul", `<button class="btn primary" id="qNew">+ Novo orçamento</button>`) + `
+  $("#main").innerHTML = head("Orçamentos", "Monte o orçamento e gere o PDF com a marca do Grupo Azul", `${ORC_EXTRA ? '<button class="btn" id="qEmp">Dados da empresa</button>' : ""}<button class="btn primary" id="qNew">+ Novo orçamento</button>`) + `
  <div class="grid kpis" style="margin-bottom:14px">
   <div class="card kpi"><div class="eyebrow">Aguardando resposta</div><div class="v num">${brl0(sum("Enviado"))}</div><div class="d">${quotes.filter(q => q.status === "Enviado").length} orçamentos enviados</div></div>
   <div class="card kpi"><div class="eyebrow">Aprovados em ${y}</div><div class="v num">${brl0(ap.reduce((t, q) => t + qTotal(q), 0))}</div><div class="d">${ap.length + rc.length ? `Taxa de aprovação de ${Math.round(ap.length / (ap.length + rc.length) * 100)}%` : "Nenhum respondido ainda"}</div></div>
@@ -495,6 +505,7 @@ VIEWS.orc = () => {
  ${list.map(q => `<tr class="click" data-id="${q.id}"><td class="num"><b>${esc(q.n)}</b></td><td>${esc(clientById(q.client).name)}</td><td>${esc(q.title)}</td><td class="num">${fd(q.date)}</td><td class="r num"><b>${brl(qTotal(q))}</b></td><td>${chip(q.status)}</td><td><button class="btn sm">Ver PDF</button></td></tr>`).join("")}
  </tbody></table></div>` : empty("Nenhum orçamento ainda.", `<button class="btn primary" id="qNew2">+ Fazer o primeiro orçamento</button>`)}</div>`;
   $$("#main tr.click").forEach(r => r.onclick = () => pdfPreview(quotes.find(q => q.id == r.dataset.id)));
+  const qe = $("#qEmp"); if (qe) qe.onclick = () => empresaForm();
   $("#qNew").onclick = () => quoteForm(); const n2 = $("#qNew2"); if (n2) n2.onclick = () => quoteForm();
 };
 function nextQuoteNumber() {
@@ -508,6 +519,8 @@ function quoteForm(q, clientId) {
  <div class="form-grid"><div class="field"><label for="nqC">Cliente</label><select class="input" id="nqC">${clients.map(c => `<option value="${c.id}" ${c.id === (q ? q.client : clientId) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div><div class="field"><label for="nqT">Serviço</label><input class="input" id="nqT" value="${esc(q ? q.title : "")}" placeholder="Ex.: Troca do sistema de aquecimento"></div></div>
  <div class="grid" style="gap:8px"><div class="item-row eyebrow"><span>Item</span><span>Qtd.</span><span>Valor un.</span><span></span></div><div class="items" id="nqItems"></div><button class="btn sm" id="nqAdd" style="justify-self:start">+ Adicionar item</button></div>
  <div class="total-line"><span class="eyebrow">Total</span><b class="num" id="nqTot"></b></div>
+ ${ORC_EXTRA ? `<div class="form-grid"><div class="field"><label for="nqD">Data do orçamento</label><input class="input" type="date" id="nqD" value="${q ? q.date : HOJE}"></div></div>
+ <div class="field"><label for="nqN">Observações no PDF (opcional)</label><textarea class="input" id="nqN" placeholder="Ex.: Prazo de execução de 20 dias úteis. Não inclui quebra e acabamento de piso.">${esc(q && q.note || "")}</textarea></div>` : ""}
  <p class="s form-err" id="nqErr" hidden></p>
  <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="nqGo">Salvar e ver PDF</button></div>`, true);
   const tot = () => $("#nqTot").textContent = brl(items.reduce((s, i) => s + i[1] * i[2], 0));
@@ -525,12 +538,12 @@ function quoteForm(q, clientId) {
     let saved;
     const ok = await act(async () => {
       if (q) {
-        if (DEMO) Object.assign(q, { client, title, items: clean });
+        if (DEMO) Object.assign(q, { client, title, items: clean }, ORC_EXTRA ? { note: $("#nqN").value.trim(), date: $("#nqD").value || q.date } : {});
         else await live(sb.from("ga_orcamentos").update({ cliente_id: client, titulo: title, itens: clean }).eq("id", q.id));
         saved = q.id;
       } else {
         const n = nextQuoteNumber();
-        if (DEMO) { saved = nextId(quotes); quotes.unshift({ id: saved, n, client, date: HOJE, status: "Rascunho", title, items: clean }) }
+        if (DEMO) { saved = nextId(quotes); quotes.unshift({ id: saved, n, client, date: ORC_EXTRA && $("#nqD").value || HOJE, status: "Rascunho", title, items: clean, note: ORC_EXTRA ? $("#nqN").value.trim() : "" }) }
         else saved = (await live(sb.from("ga_orcamentos").insert({ numero: n, cliente_id: client, data: HOJE, status: "Rascunho", titulo: title, itens: clean }).select("id").single())).id;
       }
     }, q ? "Orçamento atualizado" : "Orçamento salvo como rascunho");
@@ -549,9 +562,11 @@ function paperHtml(q) {
    </tbody></table>
    <div class="tot num"><div class="g"><span>Total</span><span>${brl(t)}</span></div></div>
    <div class="cols"><div><div class="lbl">Condições de pagamento</div>${esc(EMPRESA.pagamento)}</div><div><div class="lbl">Garantia</div>${esc(EMPRESA.garantia)}</div></div>
+   ${q.note ? `<div><div class="lbl">Observações</div><div class="pre">${esc(q.note)}</div></div>` : ""}
+   ${EMPRESA.frase ? `<div class="frase">${esc(EMPRESA.frase)}</div>` : ""}
    <div class="sign">${esc(EMPRESA.nome)}</div>
   </div>
-  <div class="pf"><span>${esc(EMPRESA.contato)}</span><span>${esc(q.n)}</span></div>
+  <div class="pf"><span>${esc(contatoEmpresa())}${EMPRESA.cnpj ? " · CNPJ " + esc(EMPRESA.cnpj) : ""}${EMPRESA.endereco ? "<br>" + esc(EMPRESA.endereco) : ""}</span><span>${esc(q.n)}</span></div>
  </div>`;
 }
 function pdfPreview(q) {
@@ -559,14 +574,33 @@ function pdfPreview(q) {
   const c = clientById(q.client);
   const wa = waLink(c.phone, `Olá ${firstName(c.contact || c.name)}, tudo bem? Segue o orçamento ${q.n} do Grupo Azul: ${q.title}, total de ${brl(qTotal(q))}. Validade de ${EMPRESA.validade} dias. Qualquer dúvida estou à disposição.`);
   modal(`<div class="sheet-head"><div><div class="eyebrow">Orçamento</div><h2>${esc(q.n)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
- <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="s" for="pqSt">Status</label><select class="input" id="pqSt" style="width:auto">${["Rascunho", "Enviado", "Aprovado", "Recusado"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select><span style="flex:1"></span><button class="btn sm" id="pqEdit">Editar itens</button></div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="s" for="pqSt">Status</label><select class="input" id="pqSt" style="width:auto">${["Rascunho", "Enviado", "Aprovado", "Recusado"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select><span style="flex:1"></span>${ORC_EXTRA ? '<button class="btn sm" id="pqEmp">Dados da empresa</button>' : ""}<button class="btn sm" id="pqEdit">Editar orçamento</button></div>
  <div class="paper-wrap">${paperHtml(q)}</div>
  <p class="s" style="margin:0">Para mandar pelo WhatsApp: baixe o PDF, toque em "Abrir WhatsApp" e anexe o arquivo na conversa.</p>
  <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${c.phone ? `<a class="btn" href="${wa}" target="_blank" rel="noopener" id="pqWa">Abrir WhatsApp do cliente</a>` : `<span class="s">Cadastre o telefone do cliente para enviar pelo WhatsApp.</span>`}<button class="btn primary" id="pdfDl">Baixar PDF</button></div>`, true);
   $("#pqSt").onchange = () => { const st = $("#pqSt").value; act(async () => { if (DEMO) q.status = st; else await live(sb.from("ga_orcamentos").update({ status: st }).eq("id", q.id)) }, `Orçamento marcado como ${st.toLowerCase()}`) };
   $("#pqEdit").onclick = () => quoteForm(q);
+  const pe = $("#pqEmp"); if (pe) pe.onclick = () => empresaForm(q);
   $("#pdfDl").onclick = () => printQuote(q);
   const w = $("#pqWa"); if (w) w.addEventListener("click", () => { if (q.status === "Rascunho") act(async () => { if (DEMO) q.status = "Enviado"; else await live(sb.from("ga_orcamentos").update({ status: "Enviado" }).eq("id", q.id)) }) });
+}
+function empresaForm(q) {
+  const E = EMPRESA, f = (id, label, v, ph = "", type = "text") => `<div class="field"><label for="${id}">${label}</label><input class="input" id="${id}" type="${type}" value="${esc(v)}" placeholder="${esc(ph)}"></div>`;
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Sai em todos os orçamentos</div><h2>Dados da empresa</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ ${f("emNome", "Nome da empresa", E.nome)}
+ <div class="form-grid">${f("emTel", "Telefone / WhatsApp", E.telefone, "(11) 99999-9999", "tel")}${f("emMail", "E-mail", E.email, "", "email")}${f("emSite", "Site ou Instagram", E.site, "grupoazul.com.br")}${f("emCnpj", "CNPJ (opcional)", E.cnpj, "00.000.000/0001-00")}</div>
+ ${f("emEnd", "Endereço (opcional)", E.endereco, "Rua, número · bairro, cidade")}
+ <div class="field"><label for="emPag">Condições de pagamento</label><textarea class="input" id="emPag">${esc(E.pagamento)}</textarea></div>
+ <div class="field"><label for="emGar">Garantia</label><textarea class="input" id="emGar">${esc(E.garantia)}</textarea></div>
+ <div class="form-grid"><div class="field"><label for="emVal">Validade do orçamento (dias)</label><input class="input num" id="emVal" type="number" min="1" value="${E.validade}"></div></div>
+ <div class="field"><label for="emFr">Frase no fim do PDF (opcional)</label><textarea class="input" id="emFr" placeholder="Ex.: Obrigado pela confiança! Atendemos 24h para emergências.">${esc(E.frase)}</textarea></div>
+ <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="emReset">Voltar ao padrão</button><span style="display:flex;gap:8px"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="emSave">Salvar</button></span></div>`, true);
+  const done = () => { try { localStorage.setItem("ga-empresa-demo", JSON.stringify(EMPRESA)) } catch (e) { } closeModal(); render(); if (q) pdfPreview(q) };
+  $("#emSave").onclick = () => {
+    Object.assign(EMPRESA, { nome: $("#emNome").value.trim() || EMPRESA_PADRAO.nome, telefone: $("#emTel").value.trim(), email: $("#emMail").value.trim(), site: $("#emSite").value.trim(), cnpj: $("#emCnpj").value.trim(), endereco: $("#emEnd").value.trim(), pagamento: $("#emPag").value.trim(), garantia: $("#emGar").value.trim(), validade: Math.max(1, +$("#emVal").value || 15), frase: $("#emFr").value.trim() });
+    done(); toast("Dados da empresa salvos");
+  };
+  twoStep($("#emReset"), "Confirmar: voltar ao padrão", () => { Object.assign(EMPRESA, EMPRESA_PADRAO); done(); toast("Dados voltaram ao padrão") });
 }
 function printQuote(q) {
   const root = $("#printRoot"), old = document.title;
