@@ -20,13 +20,14 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 
 1. **Supabase**: crie um projeto novo (plano Free). A seção 9 do `supabase/schema.sql` (no fim) já cadastra `barbeariavm0058@gmail.com` como conta principal (troque se for outro). Vá em **SQL Editor → New query**, cole o arquivo inteiro e clique em **Run**.
 2. **app.js**: preencha `SUPABASE_URL` e `SUPABASE_KEY` nas primeiras linhas. O URL fica em **Connect** (botão no alto) ou é `https://<código-do-projeto>.supabase.co`. Use a chave **anon / publishable**. Nunca coloque a *service_role / secret key*.
-   No mesmo lugar, ajuste o bloco `EMPRESA` (contato, pagamento e garantia que saem no PDF do orçamento).
+   O contato, pagamento e garantia do PDF se ajustam depois no próprio app, em **Orçamentos → Dados da empresa**.
 3. **Vercel**: **Add New → Project** → importe este repositório → **Deploy**. Não precisa configurar nada.
 4. **Supabase → Authentication → URL Configuration**: em **Site URL** coloque o endereço da Vercel (ex.: `https://grupo-azul.vercel.app`) e adicione o mesmo endereço em **Redirect URLs**.
 5. **Primeiro acesso do dono**: abra o app, toque em **Primeiro acesso? Criar minha senha**, use o e-mail do passo 1 e confirme pelo link que chega no e-mail.
 6. **Lembretes**: rode também `supabase/002_lembretes.sql` no SQL Editor (cria a aba Lembretes).
 7. **Pedidos de material**: rode também `supabase/003_faltas_resposta.sql` (resposta do escritório e "Resolvido").
-8. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
+8. **Orçamentos**: rode também `supabase/004_orcamento_empresa.sql` (dados da empresa no PDF e observações em cada orçamento).
+9. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
 
 ## Segurança
 

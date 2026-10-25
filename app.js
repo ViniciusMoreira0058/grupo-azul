@@ -25,9 +25,8 @@ const EMPRESA = { ...EMPRESA_PADRAO };
 const contatoEmpresa = () => [EMPRESA.site, EMPRESA.telefone, EMPRESA.email].filter(Boolean).join(" · ");
 
 const DEMO = !SUPABASE_URL || !SUPABASE_KEY || new URLSearchParams(location.search).has("demo");
-// edição dos dados da empresa e das observações do orçamento: por enquanto só na demonstração, aguardando aprovação
-const ORC_EXTRA = DEMO;
-if (ORC_EXTRA) { try { Object.assign(EMPRESA, JSON.parse(localStorage.getItem("ga-empresa-demo") || "{}")) } catch (e) { } }
+// na demonstração os dados da empresa ficam só neste aparelho; no app real vêm da tabela ga_empresa
+if (DEMO) { try { Object.assign(EMPRESA, JSON.parse(localStorage.getItem("ga-empresa-demo") || "{}")) } catch (e) { } }
 const sb = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const BUCKET = "ga-arquivos";
 const LOGO_DARK = "assets/logo-dark.png";
@@ -63,7 +62,7 @@ const appUrl = () => location.origin + location.pathname;
 
 /* ---------- estado ---------- */
 let me = null;            // { id, name, ini, role: admin|fin|tec, funcao, dono }
-let clients = [], quotes = [], obras = [], lanc = [], staff = [], lembretes = [], lemMissing = false;
+let clients = [], quotes = [], obras = [], lanc = [], staff = [], lembretes = [], lemMissing = false, empMissing = false;
 let current = "dash";
 const FOTO_URL = {};      // caminho no storage → link temporário
 
@@ -83,7 +82,7 @@ async function live(q) { const { data, error } = await q; if (error) throw error
 const sel = (t, build = q => q) => live(build(sb.from(t).select("*")).order("id", { ascending: true }).range(0, 9999));
 
 function mapClient(c) { return { id: c.id, name: c.nome, contact: c.contato || "", phone: c.telefone || "", city: c.cidade || "", obra: c.servico || "", status: c.status, value: +c.valor || 0 } }
-function mapQuote(q) { return { id: q.id, n: q.numero, client: q.cliente_id, date: q.data, status: q.status, title: q.titulo, items: q.itens || [] } }
+function mapQuote(q) { return { id: q.id, n: q.numero, client: q.cliente_id, date: q.data, status: q.status, title: q.titulo, items: q.itens || [], note: q.nota || "" } }
 function mapLanc(l) { return { id: l.id, type: l.tipo, d: l.data, desc: l.descricao, cat: l.categoria || "", who: l.quem || "", obra: l.obra_id, pay: l.forma || "", v: +l.valor, paid: l.pago, file: l.comprovante || null } }
 function mapLem(l) { return { id: l.id, title: l.titulo, obs: l.obs || "", urg: l.urgencia, due: l.data, done: l.feito, at: l.criado_em } }
 function mapStaff(e) { return { id: e.id, name: e.nome, role: e.funcao, phone: e.telefone || "", email: e.email || "", cpf: e.cpf || "", since: e.admissao || "", daily: +e.diaria || 0, access: e.acesso, active: e.ativo, dono: e.dono, linked: !!e.user_id } }
@@ -119,6 +118,8 @@ async function reload() {
   obras = ob.map(o => mapObra(o, fb, fa));
   staff.forEach(e => e.ini = initials(e.name));
   // lembretes: se a tabela ainda não existe (002_lembretes.sql não rodou), o resto do app segue normal
+  // dados da empresa do PDF: se 004_orcamento_empresa.sql não rodou, fica o padrão
+  if (r !== "tec") { try { const e = await sel("ga_empresa"); Object.assign(EMPRESA, EMPRESA_PADRAO, (e[0] && e[0].dados) || {}); empMissing = false } catch (e) { empMissing = true } }
   if (r === "admin") { try { lembretes = (await sel("ga_lembretes")).map(mapLem); lemMissing = false } catch (e) { lembretes = []; lemMissing = true } }
   // links temporários das fotos do feedback
   const paths = [...new Set(fb.flatMap(f => f.fotos || []))].filter(p => !FOTO_URL[p]);
@@ -148,6 +149,7 @@ function friendly(e) {
   if (/Failed to fetch|NetworkError/i.test(m)) return "Sem conexão com a internet.";
   if (/row-level security|permission/i.test(m)) return "Seu perfil não tem permissão para isso.";
   if (/duplicate key.*numero/i.test(m)) return "Já existe um orçamento com esse número.";
+  if (/ga_empresa|nota/i.test(m)) return "Falta rodar o arquivo 004_orcamento_empresa.sql no Supabase.";
   if (/resposta|resolvido_em/i.test(m)) return "Falta rodar o arquivo 003_faltas_resposta.sql no Supabase.";
   if (/duplicate key.*email/i.test(m)) return "Já existe alguém da equipe com esse e-mail.";
   return m;
@@ -496,7 +498,8 @@ VIEWS.orc = () => {
   const sum = s => quotes.filter(q => q.status === s).reduce((t, q) => t + qTotal(q), 0), y = HOJE.slice(0, 4);
   const ap = quotes.filter(q => q.status === "Aprovado" && q.date.startsWith(y)), rc = quotes.filter(q => q.status === "Recusado" && q.date.startsWith(y));
   const list = [...quotes].sort((a, b) => b.date.localeCompare(a.date) || b.n.localeCompare(a.n));
-  $("#main").innerHTML = head("Orçamentos", "Monte o orçamento e gere o PDF com a marca do Grupo Azul", `${ORC_EXTRA ? '<button class="btn" id="qEmp">Dados da empresa</button>' : ""}<button class="btn primary" id="qNew">+ Novo orçamento</button>`) + `
+  $("#main").innerHTML = head("Orçamentos", "Monte o orçamento e gere o PDF com a marca do Grupo Azul", `<button class="btn" id="qEmp">Dados da empresa</button><button class="btn primary" id="qNew">+ Novo orçamento</button>`) + `
+ ${empMissing ? `<div class="card note-warn" style="margin-bottom:14px">Para salvar os dados da empresa e as observações do PDF, rode uma vez o arquivo <b>supabase/004_orcamento_empresa.sql</b> no SQL Editor do Supabase.</div>` : ""}
  <div class="grid kpis" style="margin-bottom:14px">
   <div class="card kpi"><div class="eyebrow">Aguardando resposta</div><div class="v num">${brl0(sum("Enviado"))}</div><div class="d">${quotes.filter(q => q.status === "Enviado").length} orçamentos enviados</div></div>
   <div class="card kpi"><div class="eyebrow">Aprovados em ${y}</div><div class="v num">${brl0(ap.reduce((t, q) => t + qTotal(q), 0))}</div><div class="d">${ap.length + rc.length ? `Taxa de aprovação de ${Math.round(ap.length / (ap.length + rc.length) * 100)}%` : "Nenhum respondido ainda"}</div></div>
@@ -519,8 +522,8 @@ function quoteForm(q, clientId) {
  <div class="form-grid"><div class="field"><label for="nqC">Cliente</label><select class="input" id="nqC">${clients.map(c => `<option value="${c.id}" ${c.id === (q ? q.client : clientId) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div><div class="field"><label for="nqT">Serviço</label><input class="input" id="nqT" value="${esc(q ? q.title : "")}" placeholder="Ex.: Troca do sistema de aquecimento"></div></div>
  <div class="grid" style="gap:8px"><div class="item-row eyebrow"><span>Item</span><span>Qtd.</span><span>Valor un.</span><span></span></div><div class="items" id="nqItems"></div><button class="btn sm" id="nqAdd" style="justify-self:start">+ Adicionar item</button></div>
  <div class="total-line"><span class="eyebrow">Total</span><b class="num" id="nqTot"></b></div>
- ${ORC_EXTRA ? `<div class="form-grid"><div class="field"><label for="nqD">Data do orçamento</label><input class="input" type="date" id="nqD" value="${q ? q.date : HOJE}"></div></div>
- <div class="field"><label for="nqN">Observações no PDF (opcional)</label><textarea class="input" id="nqN" placeholder="Ex.: Prazo de execução de 20 dias úteis. Não inclui quebra e acabamento de piso.">${esc(q && q.note || "")}</textarea></div>` : ""}
+ ${`<div class="form-grid"><div class="field"><label for="nqD">Data do orçamento</label><input class="input" type="date" id="nqD" value="${q ? q.date : HOJE}"></div></div>
+ <div class="field"><label for="nqN">Observações no PDF (opcional)</label><textarea class="input" id="nqN" placeholder="Ex.: Prazo de execução de 20 dias úteis. Não inclui quebra e acabamento de piso.">${esc(q && q.note || "")}</textarea></div>`}
  <p class="s form-err" id="nqErr" hidden></p>
  <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="nqGo">Salvar e ver PDF</button></div>`, true);
   const tot = () => $("#nqTot").textContent = brl(items.reduce((s, i) => s + i[1] * i[2], 0));
@@ -538,13 +541,15 @@ function quoteForm(q, clientId) {
     let saved;
     const ok = await act(async () => {
       if (q) {
-        if (DEMO) Object.assign(q, { client, title, items: clean }, ORC_EXTRA ? { note: $("#nqN").value.trim(), date: $("#nqD").value || q.date } : {});
-        else await live(sb.from("ga_orcamentos").update({ cliente_id: client, titulo: title, itens: clean }).eq("id", q.id));
+        const note = $("#nqN").value.trim(), date = $("#nqD").value || q.date;
+        if (DEMO) Object.assign(q, { client, title, items: clean, note, date });
+        else await live(sb.from("ga_orcamentos").update({ cliente_id: client, titulo: title, itens: clean, nota: note || null, data: date }).eq("id", q.id));
         saved = q.id;
       } else {
         const n = nextQuoteNumber();
-        if (DEMO) { saved = nextId(quotes); quotes.unshift({ id: saved, n, client, date: ORC_EXTRA && $("#nqD").value || HOJE, status: "Rascunho", title, items: clean, note: ORC_EXTRA ? $("#nqN").value.trim() : "" }) }
-        else saved = (await live(sb.from("ga_orcamentos").insert({ numero: n, cliente_id: client, data: HOJE, status: "Rascunho", titulo: title, itens: clean }).select("id").single())).id;
+        const note = $("#nqN").value.trim(), date = $("#nqD").value || HOJE;
+        if (DEMO) { saved = nextId(quotes); quotes.unshift({ id: saved, n, client, date, status: "Rascunho", title, items: clean, note }) }
+        else saved = (await live(sb.from("ga_orcamentos").insert({ numero: n, cliente_id: client, data: date, status: "Rascunho", titulo: title, itens: clean, ...(note ? { nota: note } : {}) }).select("id").single())).id;
       }
     }, q ? "Orçamento atualizado" : "Orçamento salvo como rascunho");
     if (ok) pdfPreview(quotes.find(x => x.id === saved));
@@ -574,7 +579,7 @@ function pdfPreview(q) {
   const c = clientById(q.client);
   const wa = waLink(c.phone, `Olá ${firstName(c.contact || c.name)}, tudo bem? Segue o orçamento ${q.n} do Grupo Azul: ${q.title}, total de ${brl(qTotal(q))}. Validade de ${EMPRESA.validade} dias. Qualquer dúvida estou à disposição.`);
   modal(`<div class="sheet-head"><div><div class="eyebrow">Orçamento</div><h2>${esc(q.n)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
- <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="s" for="pqSt">Status</label><select class="input" id="pqSt" style="width:auto">${["Rascunho", "Enviado", "Aprovado", "Recusado"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select><span style="flex:1"></span>${ORC_EXTRA ? '<button class="btn sm" id="pqEmp">Dados da empresa</button>' : ""}<button class="btn sm" id="pqEdit">Editar orçamento</button></div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="s" for="pqSt">Status</label><select class="input" id="pqSt" style="width:auto">${["Rascunho", "Enviado", "Aprovado", "Recusado"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select><span style="flex:1"></span><button class="btn sm" id="pqEmp">Dados da empresa</button><button class="btn sm" id="pqEdit">Editar orçamento</button></div>
  <div class="paper-wrap">${paperHtml(q)}</div>
  <p class="s" style="margin:0">Para mandar pelo WhatsApp: baixe o PDF, toque em "Abrir WhatsApp" e anexe o arquivo na conversa.</p>
  <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${c.phone ? `<a class="btn" href="${wa}" target="_blank" rel="noopener" id="pqWa">Abrir WhatsApp do cliente</a>` : `<span class="s">Cadastre o telefone do cliente para enviar pelo WhatsApp.</span>`}<button class="btn primary" id="pdfDl">Baixar PDF</button></div>`, true);
@@ -595,12 +600,16 @@ function empresaForm(q) {
  <div class="form-grid"><div class="field"><label for="emVal">Validade do orçamento (dias)</label><input class="input num" id="emVal" type="number" min="1" value="${E.validade}"></div></div>
  <div class="field"><label for="emFr">Frase no fim do PDF (opcional)</label><textarea class="input" id="emFr" placeholder="Ex.: Obrigado pela confiança! Atendemos 24h para emergências.">${esc(E.frase)}</textarea></div>
  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="emReset">Voltar ao padrão</button><span style="display:flex;gap:8px"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="emSave">Salvar</button></span></div>`, true);
-  const done = () => { try { localStorage.setItem("ga-empresa-demo", JSON.stringify(EMPRESA)) } catch (e) { } closeModal(); render(); if (q) pdfPreview(q) };
-  $("#emSave").onclick = () => {
-    Object.assign(EMPRESA, { nome: $("#emNome").value.trim() || EMPRESA_PADRAO.nome, telefone: $("#emTel").value.trim(), email: $("#emMail").value.trim(), site: $("#emSite").value.trim(), cnpj: $("#emCnpj").value.trim(), endereco: $("#emEnd").value.trim(), pagamento: $("#emPag").value.trim(), garantia: $("#emGar").value.trim(), validade: Math.max(1, +$("#emVal").value || 15), frase: $("#emFr").value.trim() });
-    done(); toast("Dados da empresa salvos");
+  const salvar = async (dados, msg) => {
+    const ok = await act(async () => {
+      if (DEMO) { try { localStorage.setItem("ga-empresa-demo", JSON.stringify(dados)) } catch (e) { } }
+      else await live(sb.from("ga_empresa").upsert({ id: 1, dados, atualizado_em: new Date().toISOString() }));
+      Object.assign(EMPRESA, dados);
+    }, msg);
+    if (ok) { closeModal(); if (q) pdfPreview(q) }
   };
-  twoStep($("#emReset"), "Confirmar: voltar ao padrão", () => { Object.assign(EMPRESA, EMPRESA_PADRAO); done(); toast("Dados voltaram ao padrão") });
+  $("#emSave").onclick = () => salvar({ nome: $("#emNome").value.trim() || EMPRESA_PADRAO.nome, telefone: $("#emTel").value.trim(), email: $("#emMail").value.trim(), site: $("#emSite").value.trim(), cnpj: $("#emCnpj").value.trim(), endereco: $("#emEnd").value.trim(), pagamento: $("#emPag").value.trim(), garantia: $("#emGar").value.trim(), validade: Math.max(1, +$("#emVal").value || 15), frase: $("#emFr").value.trim() }, "Dados da empresa salvos");
+  twoStep($("#emReset"), "Confirmar: voltar ao padrão", () => salvar({ ...EMPRESA_PADRAO }, "Dados voltaram ao padrão"));
 }
 function printQuote(q) {
   const root = $("#printRoot"), old = document.title;
