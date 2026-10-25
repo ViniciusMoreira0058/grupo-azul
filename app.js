@@ -734,7 +734,7 @@ function exportCsv(list) {
 
 /* ---------- Relatórios ---------- */
 let relN = 6;
-VIEWS.rel = () => {
+function viewRelOld() {
   const months = lastMonths(relN), first = months[0] + "-01";
   const sumM = (k, t) => lanc.filter(l => l.paid && l.type === t && l.d.startsWith(k)).reduce((s, l) => s + l.v, 0);
   const IN = months.map(k => sumM(k, "in")), OUT = months.map(k => sumM(k, "out")), profit = IN.map((v, i) => v - OUT[i]);
@@ -765,7 +765,215 @@ VIEWS.rel = () => {
   <div class="card soon-card"><span class="soon" style="margin:0;justify-self:start">Em breve</span><h3>Ordens de serviço</h3><p>OS para a equipe de campo, com checklist, fotos antes e depois e assinatura do cliente no celular.</p></div>
  </div>`;
   $$("#rTabs button").forEach(b => b.onclick = () => { relN = +b.dataset.n; VIEWS.rel() });
+}
+/* ---------- Relatórios com sub-abas (por enquanto só na demonstração) ---------- */
+const REL_V2 = DEMO;
+const REL_TABS = [["obras", "Obras finalizadas"], ["fin", "Financeiro"], ["lucro", "Lucro por obra"], ["equipe", "Equipe e orçamentos"]];
+let relTab = "obras", relBusca = "", relAno = "", relFin = "mes", relDe = "", relAte = "", relEqN = 6;
+VIEWS.rel = () => {
+  if (!REL_V2) return viewRelOld();
+  $("#main").innerHTML = head("Relatórios", "Obras entregues, financeiro, lucro e desempenho da equipe") + `
+ <div class="tabs rel-tabs" id="relTabs" style="margin-bottom:14px">${REL_TABS.map(([k, t]) => `<button data-k="${k}" class="${relTab === k ? "active" : ""}">${t}</button>`).join("")}</div>
+ <div id="relBody"></div>`;
+  $$("#relTabs button").forEach(b => b.onclick = () => { relTab = b.dataset.k; VIEWS.rel() });
+  ({ obras: relObras, fin: relFinanceiro, lucro: relLucro, equipe: relEquipe })[relTab]($("#relBody"));
 };
+
+// entrega = último feedback de uma obra concluída (ou o prazo, se não houver feedback)
+const entregaObra = o => o.log.reduce((m, l) => l.d > m ? l.d : m, "") || o.end;
+const atrasoObra = o => Math.max(0, diasEntre(o.end, entregaObra(o)));
+const prazoChip = o => { const a = atrasoObra(o); return a ? `<span class="chip c-warn">${a} ${a === 1 ? "dia" : "dias"} de atraso</span>` : '<span class="chip c-good">No prazo</span>' };
+const contratoObra = o => { const q = quotes.find(q => q.status === "Aprovado" && q.client === o.client && q.title === o.title); return q ? qTotal(q) : clientById(o.client).value || 0 };
+function diasPorPessoa(o) { const m = {}; new Set(o.log.map(l => l.who + "|" + l.d)).forEach(k => { const w = k.split("|")[0]; m[w] = (m[w] || 0) + 1 }); return m }
+function contasObra(o) {
+  const ls = lanc.filter(l => l.obra === o.id), soma = (t, pago) => ls.filter(l => l.type === t && (pago == null || l.paid === pago)).reduce((s, l) => s + l.v, 0);
+  const dias = diasPorPessoa(o), mo = Object.entries(dias).reduce((s, [w, n]) => s + n * (emp(w).daily || 0), 0);
+  const contrato = contratoObra(o), recebido = soma("in", true), material = soma("out"), lucro = (contrato || recebido) - material - mo;
+  return { contrato, recebido, aReceber: Math.max(0, contrato - recebido), material, mo, lucro, margem: (contrato || recebido) ? lucro / (contrato || recebido) : 0, dias: Object.values(dias).reduce((a, b) => a + b, 0) };
+}
+const pctTxt = v => `${Math.round(v * 100)}%`;
+
+/* 1. Obras finalizadas */
+function relObras(el) {
+  const fin = obras.filter(o => o.pct >= 100).sort((a, b) => entregaObra(b).localeCompare(entregaObra(a)));
+  const anos = [...new Set(fin.map(o => entregaObra(o).slice(0, 4)))];
+  const t = relBusca.trim().toLowerCase();
+  const list = fin.filter(o => (!relAno || entregaObra(o).startsWith(relAno)) && (!t || (clientById(o.client).name + " " + o.title).toLowerCase().includes(t)));
+  const noPrazo = fin.filter(o => !atrasoObra(o)).length;
+  el.innerHTML = `
+ <div class="grid kpis" style="margin-bottom:14px">
+  <div class="card kpi"><div class="eyebrow">Obras entregues</div><div class="v num">${fin.length}</div></div>
+  <div class="card kpi"><div class="eyebrow">Entregues no prazo</div><div class="v num">${fin.length ? pctTxt(noPrazo / fin.length) : "—"}</div><div class="d">${noPrazo} de ${fin.length}</div></div>
+ </div>
+ <div class="card"><div class="card-head"><h2>Obras finalizadas</h2><span class="s">Toque numa obra para ver o relatório e gerar o PDF</span></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="input" id="rbBusca" placeholder="Buscar cliente ou serviço" value="${esc(relBusca)}" style="flex:1 1 200px"><select class="input" id="rbAno" style="width:auto"><option value="">Todos os anos</option>${anos.map(a => `<option ${a === relAno ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+  <div class="list" id="rbList">${list.map(o => `<div class="row click" data-id="${o.id}"><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${esc(o.title)} · entregue em ${fd(entregaObra(o))}</div></div>${prazoChip(o)}</div>`).join("") || '<p class="s" style="margin:0">Nenhuma obra encontrada.</p>'}</div>
+ </div>`;
+  $("#rbBusca").oninput = e => { relBusca = e.target.value; const pos = e.target.selectionStart; relObras(el); const i = $("#rbBusca"); i.focus(); i.setSelectionRange(pos, pos) };
+  $("#rbAno").onchange = e => { relAno = e.target.value; relObras(el) };
+  $$("#rbList .row").forEach(r => r.onclick = () => relatorioObra(obras.find(o => o.id === +r.dataset.id)));
+}
+function relatorioObra(o, tipo = "cliente") {
+  const c = clientById(o.client);
+  const wa = waLink(c.phone, `Olá ${firstName(c.contact || c.name)}, tudo bem? Segue o relatório da obra "${o.title}", entregue em ${fd(entregaObra(o))}. Obrigado pela confiança no Grupo Azul!`);
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Relatório da obra</div><h2>${esc(c.name)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ <div class="tabs" id="roTipo" style="align-self:flex-start"><button data-t="cliente" class="${tipo === "cliente" ? "active" : ""}">Para o cliente</button><button data-t="interno" class="${tipo === "interno" ? "active" : ""}">Interno (completo)</button></div>
+ <p class="s" style="margin:0">${tipo === "cliente" ? "O que foi feito, equipe, fotos e garantia. Sem problemas internos nem custos." : "Tudo da obra: diário completo, problemas, materiais pedidos e o resultado financeiro. Só para o escritório."}</p>
+ <div class="paper-wrap">${obraPaper(o, tipo)}</div>
+ <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${tipo === "cliente" ? (c.phone ? `<a class="btn" href="${wa}" target="_blank" rel="noopener">Abrir WhatsApp do cliente</a>` : `<span class="s">Cadastre o telefone do cliente para enviar pelo WhatsApp.</span>`) : ""}<button class="btn primary" id="roPdf">Baixar PDF</button></div>`, true);
+  $$("#roTipo button").forEach(b => b.onclick = () => relatorioObra(o, b.dataset.t));
+  $("#roPdf").onclick = () => printPaper(obraPaper(o, tipo), `Relatorio ${tipo === "cliente" ? "" : "interno "}- ${c.name}`);
+}
+function paperHead(titulo, linhas) {
+  return `<div class="ph"><div class="lines bp-one" aria-hidden="true"></div><img src="${LOGO_DARK}" alt="${esc(EMPRESA.nome)}"><div class="doc"><b>${titulo}</b>${linhas.join("<br>")}</div></div>`;
+}
+const paperFoot = ref => `<div class="pf"><span>${esc(contatoEmpresa())}${EMPRESA.cnpj ? " · CNPJ " + esc(EMPRESA.cnpj) : ""}${EMPRESA.endereco ? "<br>" + esc(EMPRESA.endereco) : ""}</span><span>${esc(ref)}</span></div>`;
+function obraPaper(o, tipo) {
+  const c = clientById(o.client), ent = entregaObra(o), at = atrasoObra(o), cli = tipo === "cliente";
+  const equipe = [o.resp, ...o.team].map(id => emp(id)).filter(e => e.name !== "—");
+  const fotos = o.log.flatMap(l => l.fotos || []).map(fotoUrl).filter(Boolean);
+  // para o cliente: um resumo por semana; interno: o diário inteiro
+  const semanas = {}; [...o.log].reverse().forEach(l => { const k = addDays(l.d, -((D(l.d).getDay() + 6) % 7)); (semanas[k] = semanas[k] || []).push(l) });
+  const resumo = Object.entries(semanas).map(([k, ls]) => { const u = ls[ls.length - 1]; return `<tr><td class="num" style="white-space:nowrap">${fd(k)}</td><td>${esc(u.text)}</td><td class="r num">${Math.max(...ls.map(l => l.pct))}%</td></tr>` }).join("");
+  const diario = [...o.log].reverse().map(l => `<tr><td class="num" style="white-space:nowrap">${fd(l.d)}</td><td>${esc(emp(l.who).name)}</td><td>${esc(l.text)}${l.problem ? `<br><b style="color:#b45309">⚠ ${esc(l.problem)}</b>` : ""}</td><td class="r num">${l.pct}%</td></tr>`).join("");
+  const probs = o.log.filter(l => l.problem), k = contasObra(o);
+  return `<div class="paper">
+  ${paperHead("RELATÓRIO DE OBRA", [cli ? "" : "<b style='font-size:11px;display:inline;letter-spacing:.1em'>USO INTERNO</b>", `Entregue em ${fd(ent)}`, `Emitido em ${fd(HOJE)}`].filter(Boolean))}
+  <div class="pb">
+   <div class="cols"><div><div class="lbl">Cliente</div><b>${esc(c.contact || c.name)}</b><br>${c.contact ? esc(c.name) + "<br>" : ""}${esc(o.addr || c.city)}</div><div><div class="lbl">Serviço</div><b>${esc(o.title)}</b><br>Início ${fd(o.start)} · entrega ${fd(ent)}${cli ? "" : `<br>Prazo combinado: ${fd(o.end)} · ${at ? `<b style="color:#b45309">${at} dias de atraso</b>` : "<b style='color:#15803d'>no prazo</b>"}`}</div></div>
+   <div><div class="lbl">O que foi feito</div>${o.tasks.map(t => `<div>✓ ${esc(t[0])}</div>`).join("") || "—"}</div>
+   <div class="cols"><div><div class="lbl">Equipe</div>${equipe.map((e, i) => `${esc(e.name)} <span style="color:#5c6b80">· ${esc(i ? e.role : "Responsável")}</span>`).join("<br>")}</div><div><div class="lbl">Acompanhamento</div>${k.dias} diárias registradas pela equipe no app${fotos.length ? ` · ${fotos.length} fotos` : ""}</div></div>
+   ${cli ? `<div><div class="lbl">Andamento semana a semana</div><table><thead><tr><th>Semana de</th><th>Registro da equipe</th><th class="r">Concluído</th></tr></thead><tbody>${resumo}</tbody></table></div>`
+         : `<div><div class="lbl">Diário completo da obra</div><table><thead><tr><th>Data</th><th>Quem</th><th>Feedback</th><th class="r">%</th></tr></thead><tbody>${diario}</tbody></table></div>`}
+   ${fotos.length ? `<div><div class="lbl">Fotos</div><div class="pfotos">${fotos.slice(0, cli ? 12 : 60).map(u => `<img src="${esc(u)}" alt="">`).join("")}</div></div>` : ""}
+   ${cli ? `<div><div class="lbl">Garantia</div>${esc(EMPRESA.garantia)}</div>` : `
+   <div><div class="lbl">Problemas registrados (${probs.length})</div>${probs.map(l => `<div>${fd(l.d)} · ${esc(emp(l.who).name)}: ${esc(l.problem)}</div>`).join("") || "Nenhum."}</div>
+   <div><div class="lbl">Materiais pedidos pela equipe (${o.missing.length})</div>${o.missing.map(m => `<div>${fd(m.d)} · ${esc(m.item)}${m.qty ? " (" + esc(m.qty) + ")" : ""} · ${esc(m.st)}${m.urgent ? " · parou a obra" : ""}</div>`).join("") || "Nenhum."}</div>
+   <div><div class="lbl">Resultado financeiro</div><table><tbody>
+    <tr><td>Valor do contrato</td><td class="r num">${brl(k.contrato)}</td></tr>
+    <tr><td>Recebido</td><td class="r num">${brl(k.recebido)}</td></tr>
+    ${k.aReceber > 0.5 ? `<tr><td>Ainda a receber</td><td class="r num" style="color:#b45309">${brl(k.aReceber)}</td></tr>` : ""}
+    <tr><td>Material lançado na obra</td><td class="r num">− ${brl(k.material)}</td></tr>
+    <tr><td>Mão de obra (${k.dias} diárias × valor da diária)</td><td class="r num">− ${brl(k.mo)}</td></tr>
+    <tr><td><b>Lucro da obra</b></td><td class="r num"><b>${brl(k.lucro)} · ${pctTxt(k.margem)}</b></td></tr>
+   </tbody></table></div>`}
+   ${cli && EMPRESA.frase ? `<div class="frase">${esc(EMPRESA.frase)}</div>` : ""}
+   <div class="sign">${esc(EMPRESA.nome)}</div>
+  </div>
+  ${paperFoot(`Obra ${o.id} · ${fd(ent)}`)}
+ </div>`;
+}
+function printPaper(html, title) {
+  const root = $("#printRoot"), old = document.title;
+  root.innerHTML = html; document.title = title;
+  document.body.classList.add("printing");
+  const done = () => { document.body.classList.remove("printing"); root.innerHTML = ""; document.title = old; window.removeEventListener("afterprint", done) };
+  window.addEventListener("afterprint", done);
+  setTimeout(() => { window.print(); setTimeout(() => { if (document.body.classList.contains("printing")) done() }, 1500) }, 50);
+  toast('Na janela que abrir, escolha "Salvar como PDF".');
+}
+
+/* 2. Financeiro por período */
+function periodoFin() {
+  const m0 = HOJE.slice(0, 8) + "01", fimMes = k => addDays(addMonths(k, 1), -1);
+  const P = { mes: [m0, HOJE, "Este mês"], ant: [addMonths(m0, -1), addDays(m0, -1), "Mês passado"], tri: [addMonths(m0, -2), HOJE, "Últimos 3 meses"], ano: [HOJE.slice(0, 4) + "-01-01", HOJE, "Este ano"], doze: [addMonths(m0, -11), HOJE, "Últimos 12 meses"] };
+  if (relFin === "livre") return [relDe || m0, relAte || HOJE, "Período escolhido"];
+  return P[relFin] || P.mes;
+}
+function relFinanceiro(el) {
+  const [de, ate, nome] = periodoFin();
+  const ls = lanc.filter(l => l.paid && l.d >= de && l.d <= ate).sort((a, b) => b.d.localeCompare(a.d));
+  const sum = t => ls.filter(l => l.type === t).reduce((s, l) => s + l.v, 0), IN = sum("in"), OUT = sum("out");
+  const pend = lanc.filter(l => !l.paid && l.d <= ate), aRec = pend.filter(l => l.type === "in").reduce((s, l) => s + l.v, 0), aPag = pend.filter(l => l.type === "out").reduce((s, l) => s + l.v, 0);
+  const meses = []; for (let k = de.slice(0, 7) + "-01"; k <= ate; k = addMonths(k, 1)) meses.push(k.slice(0, 7));
+  const porMes = meses.map(k => ls.filter(l => l.d.startsWith(k)).reduce((s, l) => s + (l.type === "in" ? l.v : -l.v), 0));
+  const cat = t => { const cs = CATS[t].map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), mx = Math.max(1, ...cs.map(c => c[1])); return cs.map(c => `<div><div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span>${c[0]}</span><b class="num">${brl0(c[1])}</b></div><div class="bar ${t === "in" ? "bar-in" : ""}"><i style="width:${c[1] / mx * 100}%"></i></div></div>`).join("") || '<p class="s" style="margin:0">Nada no período.</p>' };
+  const obraNome = id => { const o = obras.find(x => x.id === id); return o ? clientById(o.client).name : "" };
+  el.innerHTML = `
+ <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"><div class="tabs" id="rfPer">${[["mes", "Este mês"], ["ant", "Mês passado"], ["tri", "3 meses"], ["ano", "Este ano"], ["doze", "12 meses"], ["livre", "Escolher datas"]].map(([k, t]) => `<button data-k="${k}" class="${relFin === k ? "active" : ""}">${t}</button>`).join("")}</div>
+ ${relFin === "livre" ? `<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="input" type="date" id="rfDe" value="${de}" style="width:auto"><span class="s">até</span><input class="input" type="date" id="rfAte" value="${ate}" style="width:auto"></span>` : ""}
+ <span style="flex:1"></span><button class="btn primary" id="rfPdf">Baixar PDF</button></div>
+ <div class="grid kpis" style="margin-bottom:14px">
+  <div class="card kpi"><div class="eyebrow">Entradas</div><div class="v num up">${brl0(IN)}</div><div class="d">${fd(de)} a ${fd(ate)}</div></div>
+  <div class="card kpi"><div class="eyebrow">Saídas</div><div class="v num down">${brl0(OUT)}</div><div class="d">${ls.filter(l => l.type === "out").length} lançamentos</div></div>
+  <div class="card kpi"><div class="eyebrow">Saldo do período</div><div class="v num">${brl0(IN - OUT)}</div><div class="d">Margem ${IN ? pctTxt((IN - OUT) / IN) : "—"}</div></div>
+  <div class="card kpi"><div class="eyebrow">Em aberto</div><div class="v num">${brl0(aRec - aPag)}</div><div class="d">A receber ${brl0(aRec)} · a pagar ${brl0(aPag)}</div></div>
+ </div>
+ ${meses.length > 1 ? `<div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Saldo mês a mês</h2></div>${lineChart(porMes, meses.map(k => MES3[+k.slice(5) - 1] + (meses.length > 6 ? "/" + k.slice(2, 4) : "")))}</div>` : ""}
+ <div class="grid two">
+  <div class="card"><div class="card-head"><h2>Entradas por tipo</h2></div><div class="grid" style="gap:12px">${cat("in")}</div></div>
+  <div class="card"><div class="card-head"><h2>Saídas por categoria</h2></div><div class="grid" style="gap:12px">${cat("out")}</div></div>
+ </div>
+ <div class="card" style="margin-top:14px"><div class="card-head"><h2>Lançamentos</h2><span class="s">${nome} · ${ls.length} pagos</span></div>
+  <div class="list">${ls.slice(0, 60).map(l => `<div class="row"><div class="grow"><div class="t">${esc(l.desc)}</div><div class="s">${fd(l.d)} · ${esc(l.cat)}${l.obra ? " · " + esc(obraNome(l.obra)) : ""}</div></div><b class="num ${l.type === "in" ? "up" : "down"}" style="white-space:nowrap">${l.type === "in" ? "+" : "−"} ${brl(l.v)}</b></div>`).join("") || '<p class="s" style="margin:0">Nenhum lançamento pago no período.</p>'}</div>${ls.length > 60 ? `<p class="s" style="margin:8px 0 0">Mostrando os 60 mais recentes. O PDF traz todos os ${ls.length}.</p>` : ""}</div>`;
+  $$("#rfPer button").forEach(b => b.onclick = () => { if (b.dataset.k === "livre" && relFin !== "livre") { relDe = de; relAte = ate } relFin = b.dataset.k; relFinanceiro(el) });
+  const fx = () => { relDe = $("#rfDe").value; relAte = $("#rfAte").value; if (relDe && relAte && relDe <= relAte) relFinanceiro(el) };
+  if ($("#rfDe")) { $("#rfDe").onchange = fx; $("#rfAte").onchange = fx }
+  $("#rfPdf").onclick = () => printPaper(finPaper(de, ate, ls, IN, OUT, obraNome), `Financeiro ${fd(de)} a ${fd(ate)}`.replace(/\//g, "-"));
+}
+function finPaper(de, ate, ls, IN, OUT, obraNome) {
+  const tab = t => CATS[t].map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).map(c => `<tr><td>${c[0]}</td><td class="r num">${brl(c[1])}</td></tr>`).join("");
+  return `<div class="paper">
+  ${paperHead("RELATÓRIO FINANCEIRO", [`${fd(de)} a ${fd(ate)}`, `Emitido em ${fd(HOJE)}`])}
+  <div class="pb">
+   <div class="cols"><div><div class="lbl">Entradas</div><b style="font-size:16px">${brl(IN)}</b></div><div><div class="lbl">Saídas</div><b style="font-size:16px">${brl(OUT)}</b></div></div>
+   <div class="tot num"><div class="g"><span>Saldo</span><span>${brl(IN - OUT)}</span></div></div>
+   <div class="cols"><div><div class="lbl">Entradas por tipo</div><table><tbody>${tab("in") || "<tr><td>—</td></tr>"}</tbody></table></div><div><div class="lbl">Saídas por categoria</div><table><tbody>${tab("out") || "<tr><td>—</td></tr>"}</tbody></table></div></div>
+   <div><div class="lbl">Lançamentos pagos (${ls.length})</div><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th class="r">Valor</th></tr></thead><tbody>
+    ${[...ls].reverse().map(l => `<tr><td class="num" style="white-space:nowrap">${fd(l.d)}</td><td>${esc(l.desc)}${l.obra ? ` <span style="color:#5c6b80">· ${esc(obraNome(l.obra))}</span>` : ""}</td><td>${esc(l.cat)}</td><td class="r num" style="white-space:nowrap">${l.type === "in" ? "" : "− "}${brl(l.v)}</td></tr>`).join("")}
+   </tbody></table></div>
+  </div>
+  ${paperFoot("Financeiro")}
+ </div>`;
+}
+
+/* 3. Lucro por obra */
+function relLucro(el) {
+  const lista = obras.filter(o => o.pct >= 100).map(o => ({ o, k: contasObra(o) })).sort((a, b) => b.k.margem - a.k.margem);
+  const fin = lista, tot = fin.reduce((s, x) => s + x.k.lucro, 0), base = fin.reduce((s, x) => s + (x.k.contrato || x.k.recebido), 0);
+  const best = fin[0], worst = fin[fin.length - 1];
+  el.innerHTML = `
+ <div class="grid kpis" style="margin-bottom:14px">
+  <div class="card kpi"><div class="eyebrow">Lucro das obras entregues</div><div class="v num">${brl0(tot)}</div><div class="d">${fin.length} obras</div></div>
+  <div class="card kpi"><div class="eyebrow">Margem média</div><div class="v num">${base ? pctTxt(tot / base) : "—"}</div></div>
+  <div class="card kpi"><div class="eyebrow">Melhor margem</div><div class="v num">${best ? pctTxt(best.k.margem) : "—"}</div><div class="d">${best ? esc(best.o.title) : ""}</div></div>
+  <div class="card kpi"><div class="eyebrow">Menor margem</div><div class="v num">${worst ? pctTxt(worst.k.margem) : "—"}</div><div class="d">${worst ? esc(worst.o.title) : ""}</div></div>
+ </div>
+ <div class="card"><div class="card-head"><h2>Quanto cada obra deu de lucro</h2><span class="s">Contrato − material lançado na obra − diárias da equipe nos dias com feedback</span></div>
+  <div class="table-wrap"><table><thead><tr><th>Obra</th><th>Entrega</th><th class="r">Contrato</th><th class="r">Material</th><th class="r">Mão de obra</th><th class="r">Lucro</th><th style="min-width:120px">Margem</th></tr></thead><tbody>
+  ${lista.map(({ o, k }) => `<tr class="click" data-id="${o.id}"><td><b>${esc(clientById(o.client).name)}</b><div class="s">${esc(o.title)}</div></td><td>${prazoChip(o)}</td><td class="r num">${brl0(k.contrato)}</td><td class="r num">${brl0(k.material)}</td><td class="r num">${brl0(k.mo)}</td><td class="r num"><b>${brl0(k.lucro)}</b></td><td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:${Math.max(0, Math.min(100, k.margem * 100))}%"></i></div><b class="num">${pctTxt(k.margem)}</b></div></td></tr>`).join("")}
+  </tbody></table></div>
+  <p class="s" style="margin:10px 0 0">Para o cálculo ficar certo, ao lançar uma saída no Financeiro escolha a obra a que ela pertence. Obras em andamento entram aqui quando forem concluídas.</p></div>`;
+  $$("#relBody tr.click").forEach(r => r.onclick = () => { const o = obras.find(x => x.id === +r.dataset.id); relatorioObra(o, "interno") });
+}
+
+/* 4. Equipe e orçamentos */
+function relEquipe(el) {
+  const de = addMonths(HOJE, -relEqN);
+  const campo = staff.filter(e => e.access === "tec" && (e.active || obras.some(o => o.log.some(l => l.who === e.id && l.d >= de))));
+  const linhas = campo.map(e => {
+    const logs = obras.flatMap(o => o.log.filter(l => l.who === e.id && l.d >= de).map(l => ({ ...l, o })));
+    const dias = new Set(logs.map(l => l.d)).size, obs = new Set(logs.map(l => l.o.id));
+    const entregues = obras.filter(o => o.pct >= 100 && entregaObra(o) >= de && (o.resp === e.id || o.team.includes(e.id)));
+    return { e, dias, n: logs.length, obras: obs.size, probs: logs.filter(l => l.problem).length, ent: entregues.length, noPrazo: entregues.filter(o => !atrasoObra(o)).length };
+  }).sort((a, b) => b.dias - a.dias);
+  const qs = quotes.filter(q => q.date >= de), env = qs.filter(q => q.status !== "Rascunho"), ap = qs.filter(q => q.status === "Aprovado"), rc = qs.filter(q => q.status === "Recusado"), ag = qs.filter(q => q.status === "Enviado");
+  const vAp = ap.reduce((s, q) => s + qTotal(q), 0);
+  el.innerHTML = `
+ <div class="tabs" id="reN" style="margin-bottom:14px;width:max-content">${[3, 6, 12].map(n => `<button data-n="${n}" class="${relEqN === n ? "active" : ""}">${n} meses</button>`).join("")}</div>
+ <div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Equipe de campo</h2><span class="s">Últimos ${relEqN} meses, pelos feedbacks no app</span></div>
+  <div class="list">${linhas.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.e.name)}</div><div class="s">${esc(x.e.role)}${x.e.active ? "" : " · desligado"} · ${x.obras} ${x.obras === 1 ? "obra" : "obras"} · ${x.probs} ${x.probs === 1 ? "problema relatado" : "problemas relatados"}${x.ent ? ` · ${x.noPrazo} de ${x.ent} entregas no prazo` : ""}</div></div><div style="text-align:right"><b class="num" style="font-size:17px">${x.dias}</b><div class="s">dias</div></div></div>`).join("")}</div></div>
+ <div class="grid kpis" style="margin-bottom:14px">
+  <div class="card kpi"><div class="eyebrow">Orçamentos enviados</div><div class="v num">${env.length}</div><div class="d">últimos ${relEqN} meses</div></div>
+  <div class="card kpi"><div class="eyebrow">Taxa de aprovação</div><div class="v num">${ap.length + rc.length ? pctTxt(ap.length / (ap.length + rc.length)) : "—"}</div><div class="d">${ap.length} aprovados · ${rc.length} recusados</div></div>
+  <div class="card kpi"><div class="eyebrow">Valor aprovado</div><div class="v num">${brl0(vAp)}</div><div class="d">Ticket médio ${brl0(ap.length ? vAp / ap.length : 0)}</div></div>
+  <div class="card kpi"><div class="eyebrow">Aguardando resposta</div><div class="v num">${ag.length}</div><div class="d">${brl0(ag.reduce((s, q) => s + qTotal(q), 0))}</div></div>
+ </div>
+ ${ag.length ? `<div class="card"><div class="card-head"><h2>Orçamentos sem resposta</h2><span class="s">Vale ligar para o cliente</span></div><div class="list">${ag.sort((a, b) => a.date.localeCompare(b.date)).map(q => `<div class="row click" data-q="${q.id}"><div class="grow"><div class="t">${esc(clientById(q.client).name)}</div><div class="s">${esc(q.n)} · ${esc(q.title)} · enviado há ${diasEntre(q.date, HOJE)} dias</div></div><b class="num">${brl0(qTotal(q))}</b></div>`).join("")}</div></div>` : ""}`;
+  $$("#reN button").forEach(b => b.onclick = () => { relEqN = +b.dataset.n; relEquipe(el) });
+  $$("#relBody [data-q]").forEach(r => r.onclick = () => pdfPreview(quotes.find(q => q.id === +r.dataset.q)));
+}
+
 
 /* ---------- Pedidos de material: resolver e responder ---------- */
 const resolvidasRecentes = o => o.missing.filter(m => m.st === "Comprado" && m.doneAt && new Date(m.doneAt) > new Date(Date.now() - 5 * 864e5));
