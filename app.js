@@ -84,7 +84,7 @@ function mapObra(o, fb, fa) {
     log: fb.filter(f => f.obra_id === o.id).sort((a, b) => b.data.localeCompare(a.data) || b.id - a.id)
       .map(f => ({ id: f.id, d: f.data, who: f.autor, pct: f.pct, text: f.texto || "", problem: f.problema || "", fotos: f.fotos || [] })),
     missing: fa.filter(m => m.obra_id === o.id).sort((a, b) => b.id - a.id)
-      .map(m => ({ id: m.id, item: m.item, qty: m.qtd || "", urgent: m.urgente, obs: m.obs || "", by: m.autor, d: m.data, st: m.status }))
+      .map(m => ({ id: m.id, item: m.item, qty: m.qtd || "", urgent: m.urgente, obs: m.obs || "", by: m.autor, d: m.data, st: m.status, reply: m.resposta || "", replyAt: m.resposta_em || null, doneAt: m.resolvido_em || null }))
   };
 }
 
@@ -138,6 +138,7 @@ function friendly(e) {
   if (/Failed to fetch|NetworkError/i.test(m)) return "Sem conexão com a internet.";
   if (/row-level security|permission/i.test(m)) return "Seu perfil não tem permissão para isso.";
   if (/duplicate key.*numero/i.test(m)) return "Já existe um orçamento com esse número.";
+  if (/resposta|resolvido_em/i.test(m)) return "Falta rodar o arquivo 003_faltas_resposta.sql no Supabase.";
   if (/duplicate key.*email/i.test(m)) return "Já existe alguém da equipe com esse e-mail.";
   return m;
 }
@@ -404,7 +405,7 @@ VIEWS.dash = () => {
   const pend = lanc.filter(l => !l.paid), rec = pend.filter(l => l.type === "in"), recLate = rec.filter(l => l.d < HOJE).length;
   const rec30 = rec.filter(l => l.d <= addDays(HOJE, 30)).reduce((s, l) => s + l.v, 0);
   const due = [...pend].sort((a, b) => a.d.localeCompare(b.d)).slice(0, 6);
-  const act = activeObras(), avisos = [...openMissing().map(m => `<div class="row"><div class="grow"><div class="t">Falta: ${esc(m.item)}</div><div class="s">${esc(clientById(m.o.client).name)} · ${esc(emp(m.by).name)} · ${fd(m.d)}</div></div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : '<span class="chip c-warn">Aguardando</span>'}</div>`),
+  const act = activeObras(), avisos = [...openMissing().map(m => `<div class="row"><div class="grow"><div class="t">Falta: ${esc(m.item)}</div><div class="s">${esc(clientById(m.o.client).name)} · ${esc(emp(m.by).name)} · ${fd(m.d)}</div>${m.reply ? `<div class="s reply">💬 ${esc(m.reply)}</div>` : ""}</div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : '<span class="chip c-warn">Aguardando</span>'}${faltaBtns(m)}</div>`),
   ...act.filter(o => !todayDone(o)).map(o => `<div class="row"><div class="grow"><div class="t">Sem feedback hoje</div><div class="s">${esc(clientById(o.client).name)} · ${esc(emp(o.resp).name)}</div></div><span class="chip c-warn">Pendente</span></div>`)];
   $("#main").innerHTML = banner() + `<div class="hero"><div class="lines bp-one" aria-hidden="true"></div><div><div class="eyebrow">${hojeLongo()}</div><h1>${saudacao()}, ${esc(firstName(me.name))}</h1><p>${act.length} ${act.length === 1 ? "obra" : "obras"} em andamento e ${brl0(rec30)} para receber nos próximos 30 dias.</p></div><button class="btn primary" id="qNew">+ Novo orçamento</button></div>
  <div class="grid kpis">
@@ -424,6 +425,7 @@ VIEWS.dash = () => {
   <div class="card"><div class="card-head"><h2>Avisos da equipe</h2></div><div class="list">${avisos.join("") || `<p class="s" style="margin:0">Tudo em dia.</p>`}</div></div>
  </div>`;
   $$("#main [data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
+  bindFaltaBtns($("#main"));
   $("#qNew").onclick = () => { go("orc"); quoteForm() };
 };
 
@@ -722,14 +724,56 @@ VIEWS.rel = () => {
   $$("#rTabs button").forEach(b => b.onclick = () => { relN = +b.dataset.n; VIEWS.rel() });
 };
 
+/* ---------- Pedidos de material: resolver e responder ---------- */
+const resolvidasRecentes = o => o.missing.filter(m => m.st === "Comprado" && m.doneAt && new Date(m.doneAt) > new Date(Date.now() - 5 * 864e5));
+function novidadesTec() {
+  const ack = store.get("ga-novid-" + me.id) || "", recent = new Date(Date.now() - 7 * 864e5).toISOString();
+  return myObras().flatMap(o => o.missing.map(m => ({ ...m, o }))).filter(m => {
+    const t = [m.st === "Comprado" ? m.doneAt : null, m.replyAt].filter(Boolean).sort().pop();
+    return t && t > ack && t > recent;
+  });
+}
+const faltaBtns = m => `<span class="fbtns"><button class="btn sm primary" data-fok="${m.id}">Resolvido ✓</button><button class="btn sm" data-fmsg="${m.id}">Mensagem</button></span>`;
+const faltaById = id => obras.flatMap(o => o.missing.map(m => ({ m, o }))).find(x => x.m.id == id);
+async function salvarFalta(id, campos) {
+  const x = faltaById(id), now = new Date().toISOString(), row = {};
+  if (campos.resolver) { row.status = "Comprado"; row.resolvido_em = now }
+  if (campos.reply != null) { row.resposta = campos.reply; row.resposta_em = now }
+  if (DEMO) { if (campos.resolver) { x.m.st = "Comprado"; x.m.doneAt = now } if (campos.reply != null) { x.m.reply = campos.reply; x.m.replyAt = now } return }
+  await live(sb.from("ga_faltas").update(row).eq("id", x.m.id));
+}
+function bindFaltaBtns(root, reopenWelcome) {
+  $$("[data-fok]", root).forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const ok = await act(() => salvarFalta(b.dataset.fok, { resolver: true }), "Resolvido. O funcionário vai ver que já foi comprado.");
+    if (ok && reopenWelcome) { const r = b.closest(".row"); if (r) r.remove() } else if (!ok) b.disabled = false;
+  });
+  $$("[data-fmsg]", root).forEach(b => b.onclick = () => faltaMsgForm(faltaById(b.dataset.fmsg)));
+}
+function faltaMsgForm({ m, o }) {
+  const QUICK = ["A peça vai demorar uns dias. Enquanto isso, sigam com outra etapa.", "Já comprei, chega amanhã.", "Vou levar pessoalmente hoje.", "Hoje façam outra coisa: "];
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Mensagem para ${esc(emp(m.by).name)}</div><h2>${esc(m.item)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ <div class="s">${esc(clientById(o.client).name)} · pedido em ${fd(m.d)}${m.qty ? " · " + esc(m.qty) : ""}</div>
+ <div class="quick">${QUICK.map((q, i) => `<button type="button" class="btn sm" data-q="${i}">${esc(q.replace(/: $/, "…"))}</button>`).join("")}</div>
+ <div class="field"><label for="fmTxt">Mensagem</label><textarea class="input" id="fmTxt" placeholder="Ex.: a peça chega quinta; hoje adiantem o banheiro social">${esc(m.reply)}</textarea></div>
+ <p class="s form-err" id="fmErr" hidden></p>
+ <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn" data-close>Cancelar</button><button class="btn" id="fmRes">Enviar e marcar resolvido</button><button class="btn primary" id="fmSend">Enviar mensagem</button></div>`);
+  $$("[data-q]").forEach(b => b.onclick = () => { const t = $("#fmTxt"); t.value = QUICK[+b.dataset.q]; t.focus(); t.setSelectionRange(t.value.length, t.value.length) });
+  const send = resolver => { const reply = $("#fmTxt").value.trim(); if (!reply) { $("#fmErr").textContent = "Escreva a mensagem."; $("#fmErr").hidden = false; return } closeModal(); act(() => salvarFalta(m.id, { reply, resolver }), resolver ? "Mensagem enviada e item resolvido" : `Mensagem enviada para ${firstName(emp(m.by).name)}`) };
+  $("#fmSend").onclick = () => send(false); $("#fmRes").onclick = () => send(true);
+}
+
 /* ---------- Obras: funcionário ---------- */
 function viewObrasTec() {
   const mine = myObras(), act = mine.filter(o => TODAY >= D(o.start) && o.pct < 100), next = mine.filter(o => TODAY < D(o.start)), pend = act.filter(o => !todayDone(o)).length;
+  const nov = novidadesTec();
   $("#main").innerHTML = banner() + `<div class="hero"><div class="lines bp-one" aria-hidden="true"></div><div><div class="eyebrow">${hojeLongo()}</div><h1>Olá, ${esc(firstName(me.name))}</h1><p>${act.length ? `Você está em ${act.length} ${act.length === 1 ? "obra" : "obras"}. ${pend ? `Falta enviar ${pend} feedback${pend > 1 ? "s" : ""} de hoje.` : "Todos os feedbacks de hoje foram enviados."}` : "Você não está em nenhuma obra em andamento agora."}</p></div></div>
+ ${nov.length ? `<div class="card novid"><div class="card-head" style="margin-bottom:8px"><h2>📣 Novidades do escritório</h2><button class="btn sm primary" id="novOk">Entendi</button></div><div class="list">${nov.map(m => `<div class="row"><div class="grow"><div class="t">${m.st === "Comprado" ? "✅ Resolvido" : "💬 Mensagem"} · ${esc(m.item)}</div><div class="s">${esc(clientById(m.o.client).name)}${m.reply ? ` · “${esc(m.reply)}”` : m.st === "Comprado" ? " · o escritório já comprou" : ""}</div></div></div>`).join("")}</div></div>` : ""}
  <div class="grid" style="gap:16px">${act.map(obraCardTec).join("")}</div>
  ${next.length ? `<h2 style="font-size:18px;margin:26px 0 12px">Próximas obras</h2><div class="grid client-grid">${next.map(o => `<div class="card"><div class="card-head" style="margin-bottom:6px"><b>${esc(clientById(o.client).name)}</b>${stChip(o)}</div><div>${esc(o.title)}</div><div class="meta" style="margin-top:6px"><span>Início ${fd(o.start)}</span><span>${o.resp === me.id ? "Você é o responsável" : "Responsável: " + esc(emp(o.resp).name)}</span></div></div>`).join("")}</div>` : ""}
  ${!act.length && !next.length ? empty("Quando o escritório colocar você numa obra, ela aparece aqui.") : ""}`;
   $$("#main [data-fb]").forEach(b => b.onclick = () => feedbackForm(obras.find(o => o.id == b.dataset.fb)));
+  const nk = $("#novOk"); if (nk) nk.onclick = () => { store.set("ga-novid-" + me.id, new Date().toISOString()); viewObrasTec() };
   $$("#main [data-miss]").forEach(b => b.onclick = () => missingForm(obras.find(o => o.id == b.dataset.miss)));
   $$("#main [data-task]").forEach(cb => cb.onchange = () => {
     const [oid, i] = cb.dataset.task.split(":"), o = obras.find(x => x.id == oid);
@@ -748,7 +792,7 @@ function obraCardTec(o) {
   ${o.notes ? `<div class="note"><b>Recado do escritório:</b> ${esc(o.notes)}</div>` : ""}
   <div class="obra-cols">
    <div><div class="eyebrow" style="margin-bottom:6px">O que fazer</div>${o.tasks.length ? o.tasks.map((t, i) => `<label class="task"><input type="checkbox" id="t${o.id}_${i}" data-task="${o.id}:${i}" ${t[1] ? "checked" : ""}><span>${esc(t[0])}</span></label>`).join("") : '<p class="s" style="margin:0">O escritório ainda não listou as etapas.</p>'}</div>
-   <div><div class="eyebrow" style="margin-bottom:6px">Faltando para terminar</div>${miss.length ? miss.map(m => `<div class="miss"><b>${esc(m.item)}</b>${m.qty ? " · " + esc(m.qty) : ""} ${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : '<span class="chip c-warn">Aguardando</span>'}<div class="s">Pedido em ${fd(m.d)} por ${esc(emp(m.by).name)}</div></div>`).join("") : `<p class="s" style="margin:0">Nada faltando no momento.</p>`}
+   <div><div class="eyebrow" style="margin-bottom:6px">Faltando para terminar</div>${miss.length ? miss.map(m => `<div class="miss"><b>${esc(m.item)}</b>${m.qty ? " · " + esc(m.qty) : ""} ${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : '<span class="chip c-warn">Aguardando</span>'}<div class="s">Pedido em ${fd(m.d)} por ${esc(emp(m.by).name)}</div>${m.reply ? `<div class="msg-esc">💬 <b>Escritório:</b> ${esc(m.reply)}</div>` : ""}</div>`).join("") : `<p class="s" style="margin:0">Nada faltando no momento.</p>`}${resolvidasRecentes(o).map(m => `<div class="miss ok">✅ <b>${esc(m.item)}</b> · resolvido: o escritório já comprou${m.reply ? `<div class="s">💬 ${esc(m.reply)}</div>` : ""}</div>`).join("")}
     ${last ? `<div class="eyebrow" style="margin:14px 0 6px">Último feedback</div><div class="s"><b style="color:var(--fg)">${fd(last.d)}</b> · ${esc(emp(last.who).name)}: ${esc(last.text)}</div><div class="thumbs">${thumbs(last.fotos)}</div>` : ""}</div>
   </div>
   <div class="obra-actions">${todayDone(o) ? `<span class="chip c-good">Feedback de hoje enviado</span><button class="btn sm" data-fb="${o.id}">Atualizar feedback</button>` : `<button class="btn primary" data-fb="${o.id}">Enviar feedback do dia</button>`}<button class="btn" data-miss="${o.id}">Falta peça ou material</button></div>
@@ -812,7 +856,7 @@ function viewObrasAdmin() {
   <div class="card kpi"><div class="eyebrow">Feedbacks de hoje</div><div class="v num">${fb} de ${act.length}</div><div class="d">${act.length - fb ? `<span class="down">${act.length - fb} sem resposta</span>` : "Todos enviados"}</div></div>
   <div class="card kpi"><div class="eyebrow">Faltas de material</div><div class="v num ${miss.length ? "down" : ""}">${miss.length}</div><div class="d">${miss.filter(m => m.urgent).length} parando obra</div></div>
  </div>
- ${miss.length ? `<div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Pedidos da equipe</h2></div><div class="list">${miss.map(m => `<div class="row"><div class="grow"><div class="t">${esc(m.item)}${m.qty ? " · " + esc(m.qty) : ""}</div><div class="s">${esc(clientById(m.o.client).name)} · pedido por ${esc(emp(m.by).name)} em ${fd(m.d)}${m.obs ? " · " + esc(m.obs) : ""}</div></div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : '<span class="chip c-warn">Aguardando</span>'}<button class="btn sm" data-buy="${m.id}">Marcar comprado</button></div>`).join("")}</div></div>` : ""}
+ ${miss.length ? `<div class="card" style="margin-bottom:14px"><div class="card-head"><h2>Pedidos da equipe</h2></div><div class="list">${miss.map(m => `<div class="row"><div class="grow"><div class="t">${esc(m.item)}${m.qty ? " · " + esc(m.qty) : ""}</div><div class="s">${esc(clientById(m.o.client).name)} · pedido por ${esc(emp(m.by).name)} em ${fd(m.d)}${m.obs ? " · " + esc(m.obs) : ""}</div>${m.reply ? `<div class="s reply">💬 Você respondeu: ${esc(m.reply)}</div>` : ""}</div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : '<span class="chip c-warn">Aguardando</span>'}${faltaBtns(m)}</div>`).join("")}</div></div>` : ""}
  <div class="grid" style="gap:12px">${list.length ? list.map(o => {
     const c = clientById(o.client), r = emp(o.resp), nm = o.missing.filter(m => m.st === "Aberto").length; return `<button class="card obra-row" data-o="${o.id}">
   <div class="card-head" style="margin-bottom:10px;align-items:flex-start"><div style="min-width:0;text-align:left"><h2 style="font-size:17px">${esc(c.name)}</h2><div class="s">${esc(o.title)}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${stChip(o)}${TODAY >= D(o.start) && o.pct < 100 ? (todayDone(o) ? '<span class="chip c-good">Feedback hoje</span>' : '<span class="chip c-warn">Sem feedback hoje</span>') : ""}</div></div>
@@ -820,7 +864,7 @@ function viewObrasAdmin() {
   <div class="meta" style="margin-top:10px"><span class="who-chip"><span class="avatar sm">${esc(r.ini)}</span>${esc(r.name)}</span><span>${prazo(o)}</span>${nm ? `<span class="down">${nm} ${nm > 1 ? "itens faltando" : "item faltando"}</span>` : ""}</div>
  </button>` }).join("") : empty("Nenhuma obra cadastrada ainda.", `<button class="btn primary" id="oNew2">+ Cadastrar a primeira obra</button>`)}</div>`;
   $$("#main [data-o]").forEach(b => b.onclick = () => obraDetail(obras.find(o => o.id == b.dataset.o)));
-  $$("#main [data-buy]").forEach(b => b.onclick = () => { const id = +b.dataset.buy || b.dataset.buy; act(async () => { if (DEMO) openMissing().find(m => m.id == id).o.missing.find(m => m.id == id).st = "Comprado"; else await live(sb.from("ga_faltas").update({ status: "Comprado" }).eq("id", id)) }, "Marcado como comprado") });
+  bindFaltaBtns($("#main"));
   $("#oNew").onclick = () => obraForm(); const n2 = $("#oNew2"); if (n2) n2.onclick = () => obraForm();
 }
 function obraDetail(o) {
@@ -966,10 +1010,11 @@ function welcomeAdmin() {
  ${!late.length && act.length ? `<div class="boa"><span aria-hidden="true">🏆</span><div><b>A equipe está mandando bem!</b><br>Todas as ${act.length} obras estão no prazo${emDia !== null ? ` e os feedbacks estão ${emDia}% em dia` : ""}.${adi.length ? ` ${adi.map(o => esc(firstName(emp(o.resp).name))).filter((v, i, a) => a.indexOf(v) === i).join(" e ")} ${adi.length > 1 ? "estão" : "está"} adiantado${adi.length > 1 ? "s" : ""}: vale um elogio.` : ""}</div></div>` : ""}
  ${late.length ? `<div class="w-sec"><div class="eyebrow">Precisa de atenção · ${late.length} ${late.length > 1 ? "obras atrasadas" : "obra atrasada"}</div>${late.map(o => `<div class="w-obra bad"><div class="w-top"><b>${esc(clientById(o.client).name)}</b><span class="chip c-bad">${o.pct}% · esperado ${expected(o)}%</span></div><ul class="dicas">${dicas(o).map(t => `<li>${t}</li>`).join("")}</ul></div>`).join("")}${adi.length ? `<p class="s" style="margin:0">👏 ${adi.map(o => `${esc(firstName(emp(o.resp).name))} está adiantado em ${esc(clientById(o.client).name)}`).join("; ")}.</p>` : ""}</div>` : ""}
  ${porObra.length ? `<div class="w-sec"><div class="eyebrow">Feedbacks novos · ${fbNovos.length}</div>${porObra.map(l => `<div class="w-obra"><div class="w-top"><b>${esc(clientById(l.o.client).name)}</b><span class="s">${fd(l.d)} · ${esc(emp(l.who).name)} · ${l.pct}%</span></div><div class="s">${esc(l.text)}</div>${l.problem ? `<div class="down" style="font-size:13px">⚠ ${esc(l.problem)}</div>` : ""}</div>`).join("")}</div>` : act.length ? `<p class="s" style="margin:0">Nenhum feedback novo desde a última vez.</p>` : ""}
- ${faltas.length ? `<div class="w-sec"><div class="eyebrow">Faltando material · ${faltas.length}</div>${faltas.map(m => `<div class="row"><div class="grow"><div class="t">${esc(m.item)}${m.qty ? " · " + esc(m.qty) : ""}${faltasNovas.includes(m) ? ' <span class="chip c-info">Novo</span>' : ""}</div><div class="s">${esc(clientById(m.o.client).name)} · ${esc(emp(m.by).name)}</div></div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : ""}${faltaJaLembrada(m) ? "" : `<button class="btn sm" data-wl="${m.id}">+ Lembrete</button>`}</div>`).join("")}</div>` : ""}
+ ${faltas.length ? `<div class="w-sec"><div class="eyebrow">Faltando material · ${faltas.length}</div>${faltas.map(m => `<div class="row"><div class="grow"><div class="t">${esc(m.item)}${m.qty ? " · " + esc(m.qty) : ""}${faltasNovas.includes(m) ? ' <span class="chip c-info">Novo</span>' : ""}</div><div class="s">${esc(clientById(m.o.client).name)} · ${esc(emp(m.by).name)}</div></div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : ""}${faltaBtns(m)}${faltaJaLembrada(m) ? "" : `<button class="btn sm ghost" data-wl="${m.id}">+ Lembrete</button>`}</div>`).join("")}</div>` : ""}
  ${lemHoje.length ? `<div class="w-sec"><div class="eyebrow">Seus lembretes para hoje</div>${lemHoje.map(l => `<div class="row"><div class="grow"><div class="t">${esc(l.title)}</div>${l.due ? `<div class="s">${dueTxt(l)}</div>` : ""}</div><span class="chip ${URG[l.urg][1]}">${URG[l.urg][0]}</span></div>`).join("")}</div>` : ""}
  <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${lemHoje.length ? '<button class="btn" data-wgo="lem">Ver lembretes</button>' : ""}<button class="btn primary" data-wgo="obr">Ver obras</button></div>`, true);
   $$("#modalRoot [data-wgo]").forEach(b => b.onclick = () => { closeModal(); go(b.dataset.wgo) });
+  bindFaltaBtns($("#modalRoot"), true);
   $$("#modalRoot [data-wl]").forEach(b => b.onclick = async () => { const m = faltas.find(x => x.id == b.dataset.wl); b.disabled = true; if (await addLembrete(lemFromFalta(m), "Virou lembrete")) { b.replaceWith(Object.assign(document.createElement("span"), { className: "chip c-good", textContent: "Lembrete criado" })) } else b.disabled = false });
 }
 function welcomeTec() {

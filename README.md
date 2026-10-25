@@ -25,7 +25,8 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 4. **Supabase → Authentication → URL Configuration**: em **Site URL** coloque o endereço da Vercel (ex.: `https://grupo-azul.vercel.app`) e adicione o mesmo endereço em **Redirect URLs**.
 5. **Primeiro acesso do dono**: abra o app, toque em **Primeiro acesso? Criar minha senha**, use o e-mail do passo 1 e confirme pelo link que chega no e-mail.
 6. **Lembretes**: rode também `supabase/002_lembretes.sql` no SQL Editor (cria a aba Lembretes).
-7. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
+7. **Pedidos de material**: rode também `supabase/003_faltas_resposta.sql` (resposta do escritório e "Resolvido").
+8. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
 
 ## Segurança
 

@@ -336,6 +336,20 @@ a.btn{text-decoration:none}
 @keyframes alerta{0%,100%{box-shadow:0 0 0 0 rgba(239,95,95,0)}50%{box-shadow:0 0 0 4px rgba(239,95,95,.25)}}
 @keyframes sirene{0%,100%{transform:rotate(-12deg) scale(1)}50%{transform:rotate(12deg) scale(1.15)}}
 @media (prefers-reduced-motion: reduce){.alerta,.sirene{animation:none}}
+/* ---- pedidos de material ---- */
+.msg-esc{margin-top:6px;font-size:13px;background:var(--accent-soft);border-radius:10px;padding:8px 10px}
+.miss.ok{color:var(--good);font-size:13.5px}
+.miss.ok b{color:var(--fg)}
+.reply{color:var(--accent-2)!important;white-space:normal!important}
+.fbtns{display:flex;gap:6px;flex-wrap:wrap}
+.row:has(.fbtns){flex-wrap:wrap}
+.row:has(.fbtns) .grow{flex:1 1 60%}
+.row .s,.row .t{overflow-wrap:anywhere}
+@media (max-width:560px){.row .fbtns{flex-basis:100%}}
+.quick{display:flex;flex-wrap:wrap;gap:6px}
+.quick .btn{white-space:normal;text-align:left}
+.novid{border-color:var(--accent-2);margin-bottom:16px}
+.novid .t{white-space:normal}
 /* ---- tela de carregamento: chave de boca apertando o cano ---- */
 #splash{position:fixed;inset:0;z-index:200;isolation:isolate;overflow:hidden;display:grid;place-items:center;background:var(--bg);transition:opacity .4s ease}
 #splash.out{opacity:0;pointer-events:none}

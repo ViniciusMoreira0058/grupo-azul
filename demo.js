@@ -129,7 +129,9 @@ function demoSeed(HOJE, addDays, addMonths) {
   o1.log = o1.log.filter(l => l.d !== HOJE);
   o1.log.unshift({ d: HOJE, who: "e1", pct: 72, text: "Terminamos o pressurizador e testamos a 4 bar sem vazamento. Começamos os misturadores do banho master.", problem: "", fotos: [] });
   o1.missing.unshift({ id: missId++, item: "Misturador termostático Deca", qty: "2 un.", urgent: true, obs: "Modelo igual ao do banho master", by: "e1", d: HOJE, st: "Aberto" });
-  o2.missing.unshift({ id: missId++, item: "Válvula redutora de pressão 1\"", qty: "6 un.", urgent: false, obs: "", by: "e3", d: d(-3), st: "Aberto" });
+  const iso = h => new Date(Date.now() - h * 36e5).toISOString();
+  o1.missing.unshift({ id: missId++, item: "Rolo de PEX Ø20 mm (50 m)", qty: "1 rolo", urgent: false, obs: "", by: "e2", d: d(-2), st: "Comprado", reply: "Comprei na Tigre, está no depósito. Passa lá às 7h.", replyAt: iso(20), doneAt: iso(20) });
+  o2.missing.unshift({ id: missId++, item: "Válvula redutora de pressão 1\"", qty: "6 un.", urgent: false, obs: "", by: "e3", d: d(-3), st: "Aberto", reply: "O fornecedor só entrega na quinta. Até lá, sigam com a prumada 2.", replyAt: iso(30) });
   o3.log = o3.log.filter(l => l.d !== d(-2)); o3.log.unshift({ d: d(-2), who: "e8", pct: 41, text: "Vala aberta e base da caixa concretada.", problem: "Caixa chegou sem a tampa de inspeção, não dá pra assentar.", fotos: [] });
   o3.log.sort((a, b) => b.d.localeCompare(a.d));
   o3.missing.unshift({ id: missId++, item: "Tampa de inspeção para caixa de gordura 250 L", qty: "1 un.", urgent: true, obs: "", by: "e8", d: d(-2), st: "Aberto" });
