@@ -79,7 +79,14 @@ $("#themeBtn").onclick = () => { const t = document.documentElement.getAttribute
    DADOS: carregar e salvar (demonstração = só na memória; real = Supabase)
    ===================================================================== */
 async function live(q) { const { data, error } = await q; if (error) throw error; return data }
-const sel = (t, build = q => q) => live(build(sb.from(t).select("*")).order("id", { ascending: true }).range(0, 9999));
+// busca em páginas de 1000 (limite do Supabase por consulta)
+async function sel(t, build = q => q) {
+  const out = [];
+  for (let i = 0; ; i += 1000) {
+    const page = await live(build(sb.from(t).select("*")).order("id", { ascending: true }).range(i, i + 999));
+    out.push(...(page || [])); if (!page || page.length < 1000) return out;
+  }
+}
 
 function mapClient(c) { return { id: c.id, name: c.nome, contact: c.contato || "", phone: c.telefone || "", city: c.cidade || "", obra: c.servico || "", status: c.status, value: +c.valor || 0 } }
 function mapQuote(q) { return { id: q.id, n: q.numero, client: q.cliente_id, date: q.data, status: q.status, title: q.titulo, items: q.itens || [], note: q.nota || "" } }
@@ -101,14 +108,15 @@ async function reload() {
   if (DEMO) return;
   const r = me.role;
   const nomes = await live(sb.rpc("ga_nomes")) || { equipe: [], clientes: [] };
-  const desde = addDays(HOJE, -120), desdeFin = addMonths(HOJE, -24);
+  const desde = addDays(HOJE, -120);
   const [ob, fb, fa, cl, qu, la, eq] = await Promise.all([
     sel("ga_obras"),
-    sel("ga_feedbacks", q => q.gte("data", desde)),
-    sel("ga_faltas", q => q.or(`status.eq.Aberto,data.gte.${desde}`)),
+    // escritório carrega o histórico inteiro (relatórios das obras entregues); funcionário só o recente
+    r === "tec" ? sel("ga_feedbacks", q => q.gte("data", desde)) : sel("ga_feedbacks"),
+    r === "tec" ? sel("ga_faltas", q => q.or(`status.eq.Aberto,data.gte.${desde}`)) : sel("ga_faltas"),
     r === "tec" ? [] : sel("ga_clientes"),
     r === "tec" ? [] : sel("ga_orcamentos"),
-    r === "tec" ? [] : sel("ga_lancamentos", q => q.or(`data.gte.${desdeFin},pago.eq.false`)),
+    r === "tec" ? [] : sel("ga_lancamentos"),
     r === "admin" ? sel("ga_equipe") : []
   ]);
   staff = r === "admin" ? eq.map(mapStaff) : (nomes.equipe || []).map(e => ({ id: e.id, name: e.nome, role: e.funcao, active: e.ativo, access: "tec" }));
@@ -770,8 +778,8 @@ function viewRelOld() {
  </div>`;
   $$("#rTabs button").forEach(b => b.onclick = () => { relN = +b.dataset.n; VIEWS.rel() });
 }
-/* ---------- Seletor de período (de um dia até outro) · por enquanto só na demonstração ---------- */
-const PER_V2 = DEMO;
+/* ---------- Seletor de período (de um dia até outro) ---------- */
+const PER_V2 = true;
 const PER_ATALHOS = [["hoje", "Hoje"], ["7d", "7 dias"], ["mes", "Este mês"], ["ant", "Mês passado"], ["3m", "3 meses"], ["ano", "Este ano"], ["tudo", "Tudo"]];
 const PER = { fin: { k: "mes" }, obras: { k: "tudo" }, rfin: { k: "mes" }, lucro: { k: "tudo" }, equipe: { k: "ano" } };
 function periodo(key) {
@@ -796,8 +804,8 @@ function periodBar(key, redraw) {
  <div class="p-atalhos">${PER_ATALHOS.map(([pk, t]) => `<button type="button" data-pk="${pk}" class="${k === pk ? "on" : ""}">${t}</button>`).join("")}</div></div>`;
 }
 
-/* ---------- Relatórios com sub-abas (por enquanto só na demonstração) ---------- */
-const REL_V2 = DEMO;
+/* ---------- Relatórios com sub-abas ---------- */
+const REL_V2 = true;
 const REL_TABS = [["obras", "Obras finalizadas"], ["fin", "Financeiro"], ["lucro", "Lucro por obra"], ["equipe", "Equipe e orçamentos"]];
 let relTab = "obras", relBusca = "";
 VIEWS.rel = () => {
@@ -961,6 +969,7 @@ function relLucro(el) {
   <div class="table-wrap"><table><thead><tr><th>Obra</th><th>Entrega</th><th class="r">Contrato</th><th class="r">Material</th><th class="r">Mão de obra</th><th class="r">Lucro</th><th style="min-width:120px">Margem</th></tr></thead><tbody>
   ${lista.map(({ o, k }) => `<tr class="click" data-id="${o.id}"><td><b>${esc(clientById(o.client).name)}</b><div class="s">${esc(o.title)}</div></td><td>${prazoChip(o)}</td><td class="r num">${brl0(k.contrato)}</td><td class="r num">${brl0(k.material)}</td><td class="r num">${brl0(k.mo)}</td><td class="r num"><b>${brl0(k.lucro)}</b></td><td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:${Math.max(0, Math.min(100, k.margem * 100))}%"></i></div><b class="num">${pctTxt(k.margem)}</b></div></td></tr>`).join("")}
   </tbody></table></div>
+  ${me.role === "admin" ? "" : `<p class="s" style="margin:10px 0 0">A mão de obra usa o valor da diária de cada funcionário, que só o Administrador vê. Para o Financeiro ela aparece zerada.</p>`}
   <p class="s" style="margin:10px 0 0">Para o cálculo ficar certo, ao lançar uma saída no Financeiro escolha a obra a que ela pertence. Obras em andamento entram aqui quando forem concluídas.</p></div>`;
   $$("#relBody tr.click").forEach(r => r.onclick = () => { const o = obras.find(x => x.id === +r.dataset.id); relatorioObra(o, "interno") });
 }
