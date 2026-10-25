@@ -292,9 +292,10 @@ const can = p => ALLOWED[me.role].includes(p);
 function renderNav() {
   const pages = PAGES.filter(p => can(p[0]));
   const nLem = lemPend().filter(l => l.urg === "urgente" || (l.due && l.due <= HOJE)).length;
-  $("#nav").innerHTML = pages.map(([k, l]) => `<button data-p="${k}" class="${k === current ? "active" : ""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}${k === "lem" && nLem ? `<span class="nbadge">${nLem}</span>` : ""}</button>`).join("")
+  $("#nav").innerHTML = pages.map(([k, l]) => `<button data-p="${k}" class="${k === current ? "active" : ""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}${k === "lem" && nLem ? `<span class="nbadge">${nLem}</span>` : ""}</button>${k === "rel" && REL_V2 && current === "rel" ? `<div class="nav-sub">${REL_TABS.map(([sk, sl]) => `<button data-sub="${sk}" class="${relTab === sk ? "on" : ""}">${sl}</button>`).join("")}</div>` : ""}`).join("")
     + (me.role === "tec" ? "" : `<div class="nav-label eyebrow">Fase 2</div>` + SOON.map(([k, l]) => `<button disabled><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}<span class="soon">Em breve</span></button>`).join(""));
   $$("#nav button[data-p]").forEach(b => b.onclick = () => go(b.dataset.p));
+  $$("#nav button[data-sub]").forEach(b => b.onclick = () => { relTab = b.dataset.sub; go("rel") });
 }
 function go(p) {
   if (!can(p)) p = ALLOWED[me.role][0];
@@ -772,10 +773,8 @@ const REL_TABS = [["obras", "Obras finalizadas"], ["fin", "Financeiro"], ["lucro
 let relTab = "obras", relBusca = "", relAno = "", relFin = "mes", relDe = "", relAte = "", relEqN = 6;
 VIEWS.rel = () => {
   if (!REL_V2) return viewRelOld();
-  $("#main").innerHTML = head("Relatórios", "Obras entregues, financeiro, lucro e desempenho da equipe") + `
- <div class="tabs rel-tabs" id="relTabs" style="margin-bottom:14px">${REL_TABS.map(([k, t]) => `<button data-k="${k}" class="${relTab === k ? "active" : ""}">${t}</button>`).join("")}</div>
- <div id="relBody"></div>`;
-  $$("#relTabs button").forEach(b => b.onclick = () => { relTab = b.dataset.k; VIEWS.rel() });
+  const sub = { obras: "Toque numa obra para ver o relatório completo e gerar o PDF", fin: "Entradas e saídas por período", lucro: "Quanto cada obra entregue deu de lucro", equipe: "Desempenho da equipe de campo e dos orçamentos" };
+  $("#main").innerHTML = head(REL_TABS.find(t => t[0] === relTab)[1], `Relatórios · ${sub[relTab]}`) + `<div id="relBody"></div>`;
   ({ obras: relObras, fin: relFinanceiro, lucro: relLucro, equipe: relEquipe })[relTab]($("#relBody"));
 };
 
@@ -805,7 +804,7 @@ function relObras(el) {
   <div class="card kpi"><div class="eyebrow">Obras entregues</div><div class="v num">${fin.length}</div></div>
   <div class="card kpi"><div class="eyebrow">Entregues no prazo</div><div class="v num">${fin.length ? pctTxt(noPrazo / fin.length) : "—"}</div><div class="d">${noPrazo} de ${fin.length}</div></div>
  </div>
- <div class="card"><div class="card-head"><h2>Obras finalizadas</h2><span class="s">Toque numa obra para ver o relatório e gerar o PDF</span></div>
+ <div class="card"><div class="card-head"><h2>Obras entregues</h2></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="input" id="rbBusca" placeholder="Buscar cliente ou serviço" value="${esc(relBusca)}" style="flex:1 1 200px"><select class="input" id="rbAno" style="width:auto"><option value="">Todos os anos</option>${anos.map(a => `<option ${a === relAno ? "selected" : ""}>${a}</option>`).join("")}</select></div>
   <div class="list" id="rbList">${list.map(o => `<div class="row click" data-id="${o.id}"><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${esc(o.title)} · entregue em ${fd(entregaObra(o))}</div></div>${prazoChip(o)}</div>`).join("") || '<p class="s" style="margin:0">Nenhuma obra encontrada.</p>'}</div>
  </div>`;
