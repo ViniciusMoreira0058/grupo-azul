@@ -10,7 +10,7 @@ Abrindo `index.html` sem preencher o Supabase (ou com `?demo=1` no endereço), o
 
 | Perfil | O que vê |
 |---|---|
-| **Administrador** (o dono e quem ele quiser) | Tudo |
+| **Administrador** (o dono e quem ele quiser) | Tudo, inclusive Lembretes e o resumo das obras ao entrar |
 | **Financeiro** | Dashboard, clientes, orçamentos, financeiro e relatórios. Não edita obras nem a equipe |
 | **Funcionário** | Só a aba **Obras**, e só as obras em que está: etapas, prazo, feedback do dia com fotos e pedido de material |
 
@@ -24,7 +24,8 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 3. **Vercel**: **Add New → Project** → importe este repositório → **Deploy**. Não precisa configurar nada.
 4. **Supabase → Authentication → URL Configuration**: em **Site URL** coloque o endereço da Vercel (ex.: `https://grupo-azul.vercel.app`) e adicione o mesmo endereço em **Redirect URLs**.
 5. **Primeiro acesso do dono**: abra o app, toque em **Primeiro acesso? Criar minha senha**, use o e-mail do passo 1 e confirme pelo link que chega no e-mail.
-6. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
+6. **Lembretes**: rode também `supabase/002_lembretes.sql` no SQL Editor (cria a aba Lembretes).
+7. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
 
 ## Segurança
 

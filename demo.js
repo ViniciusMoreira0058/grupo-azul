@@ -188,6 +188,19 @@ function demoSeed(HOJE, addDays, addMonths) {
   }
   lanc.sort((a, b) => a.d.localeCompare(b.d)).forEach((l, i) => l.id = i + 1);
 
+  // lembretes do escritório
+  const at = n => new Date(Date.now() + n * 864e5).toISOString();
+  const lembretes = [
+    { id: 1, title: "Ligar para a síndica Marta e confirmar o corte de água de quinta", obs: "Ed. Villa Lobos · (11) 3045-7781", urg: "urgente", due: HOJE, done: false, at: at(-1) },
+    { id: 2, title: "Cobrar a parcela atrasada do Restaurante Mesa Alta", obs: "Paulo Teixeira · parcela de 30%", urg: "urgente", due: d(-2), done: false, at: at(-4) },
+    { id: 3, title: "Renovar o seguro da van Fiorino", obs: "Vence no fim do mês", urg: "normal", due: d(6), done: false, at: at(-3) },
+    { id: 4, title: "Mandar o orçamento revisado para a Clínica Sorriso Pleno", obs: "", urg: "normal", due: d(2), done: false, at: at(-2) },
+    { id: 5, title: "Aniversário do Carlos no dia 3", obs: "Comprar um bolo para a equipe", urg: "lembrar", due: null, done: false, at: at(-6) },
+    { id: 6, title: "Pedir orçamento de termofusora nova", obs: "", urg: "lembrar", due: null, done: false, at: at(-8) },
+    { id: 7, title: "Pagar o aluguel do depósito", obs: "", urg: "normal", due: d(-14), done: true, at: at(-15) },
+    { id: 8, title: "Enviar fotos da entrega para o Hotel Vista Serra", obs: "", urg: "normal", due: null, done: true, at: at(-20) }
+  ];
+
   function clientById(cid) { return clients.find(c => c.id === cid) }
-  return { staff, clients, quotes, obras, lanc };
+  return { staff, clients, quotes, obras, lanc, lembretes };
 }

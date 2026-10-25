@@ -53,7 +53,7 @@ const appUrl = () => location.origin + location.pathname;
 
 /* ---------- estado ---------- */
 let me = null;            // { id, name, ini, role: admin|fin|tec, funcao, dono }
-let clients = [], quotes = [], obras = [], lanc = [], staff = [];
+let clients = [], quotes = [], obras = [], lanc = [], staff = [], lembretes = [], lemMissing = false;
 let current = "dash";
 const FOTO_URL = {};      // caminho no storage → link temporário
 
@@ -75,6 +75,7 @@ const sel = (t, build = q => q) => live(build(sb.from(t).select("*")).order("id"
 function mapClient(c) { return { id: c.id, name: c.nome, contact: c.contato || "", phone: c.telefone || "", city: c.cidade || "", obra: c.servico || "", status: c.status, value: +c.valor || 0 } }
 function mapQuote(q) { return { id: q.id, n: q.numero, client: q.cliente_id, date: q.data, status: q.status, title: q.titulo, items: q.itens || [] } }
 function mapLanc(l) { return { id: l.id, type: l.tipo, d: l.data, desc: l.descricao, cat: l.categoria || "", who: l.quem || "", obra: l.obra_id, pay: l.forma || "", v: +l.valor, paid: l.pago, file: l.comprovante || null } }
+function mapLem(l) { return { id: l.id, title: l.titulo, obs: l.obs || "", urg: l.urgencia, due: l.data, done: l.feito, at: l.criado_em } }
 function mapStaff(e) { return { id: e.id, name: e.nome, role: e.funcao, phone: e.telefone || "", email: e.email || "", cpf: e.cpf || "", since: e.admissao || "", daily: +e.diaria || 0, access: e.acesso, active: e.ativo, dono: e.dono, linked: !!e.user_id } }
 function mapObra(o, fb, fa) {
   return {
@@ -107,6 +108,8 @@ async function reload() {
   lanc = la.map(mapLanc);
   obras = ob.map(o => mapObra(o, fb, fa));
   staff.forEach(e => e.ini = initials(e.name));
+  // lembretes: se a tabela ainda não existe (002_lembretes.sql não rodou), o resto do app segue normal
+  if (r === "admin") { try { lembretes = (await sel("ga_lembretes")).map(mapLem); lemMissing = false } catch (e) { lembretes = []; lemMissing = true } }
   // links temporários das fotos do feedback
   const paths = [...new Set(fb.flatMap(f => f.fotos || []))].filter(p => !FOTO_URL[p]);
   for (let i = 0; i < paths.length; i += 100) {
@@ -117,13 +120,13 @@ async function reload() {
 
 function loadDemo() {
   const s = demoSeed(HOJE, addDays, addMonths);
-  ({ staff, clients, quotes, obras, lanc } = s);
+  ({ staff, clients, quotes, obras, lanc } = s); lembretes = s.lembretes || [];
   staff.forEach(e => e.ini = initials(e.name));
 }
 
 let busyN = 0;
 function busy(on) { busyN += on ? 1 : -1; document.body.classList.toggle("busy", busyN > 0) }
-function render() { if (VIEWS[current]) VIEWS[current]() }
+function render() { if (VIEWS[current]) VIEWS[current](); if (me) renderNav() }
 // roda uma alteração: na demonstração mexe só na memória; no real grava e recarrega
 async function act(fn, okMsg) {
   try { busy(true); await fn(); if (!DEMO) await reload(); render(); if (okMsg) toast(okMsg); return true }
@@ -266,15 +269,17 @@ const ICON = {
   fin: '<path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/>',
   rel: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   est: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/>',
+  lem: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   os: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>'
 };
-const PAGES = [["dash", "Dashboard"], ["obr", "Obras"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"]];
+const PAGES = [["dash", "Dashboard"], ["obr", "Obras"], ["lem", "Lembretes"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"]];
 const ALLOWED = { admin: PAGES.map(p => p[0]), fin: ["dash", "cli", "orc", "fin", "rel"], tec: ["obr"] };
 const SOON = [["est", "Estoque"], ["os", "Ordens de serviço"]];
 const can = p => ALLOWED[me.role].includes(p);
 function renderNav() {
   const pages = PAGES.filter(p => can(p[0]));
-  $("#nav").innerHTML = pages.map(([k, l]) => `<button data-p="${k}" class="${k === current ? "active" : ""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}</button>`).join("")
+  const nLem = lemPend().filter(l => l.urg === "urgente" || (l.due && l.due <= HOJE)).length;
+  $("#nav").innerHTML = pages.map(([k, l]) => `<button data-p="${k}" class="${k === current ? "active" : ""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}${k === "lem" && nLem ? `<span class="nbadge">${nLem}</span>` : ""}</button>`).join("")
     + (me.role === "tec" ? "" : `<div class="nav-label eyebrow">Fase 2</div>` + SOON.map(([k, l]) => `<button disabled><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}<span class="soon">Em breve</span></button>`).join(""));
   $$("#nav button[data-p]").forEach(b => b.onclick = () => go(b.dataset.p));
 }
@@ -293,6 +298,7 @@ function enterApp() {
   $("#topAvatar").textContent = me.ini; $("#topAvatar").title = me.name;
   $("#today").textContent = `${DIA[TODAY.getDay()].slice(0, 3)}, ${TODAY.getDate()} ${MES3[TODAY.getMonth()].toLowerCase()}`;
   const h = location.hash.slice(1); go(PAGES.some(p => p[0] === h) ? h : ALLOWED[me.role][0]);
+  setTimeout(welcome, 80);
 }
 
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.setAttribute("role", "status"); document.body.appendChild(t); setTimeout(() => t.remove(), 3200) }
@@ -736,6 +742,7 @@ function obraCardTec(o) {
   return `<article class="card obra">
   <div class="card-head" style="align-items:flex-start;margin-bottom:10px"><div style="min-width:0"><div class="eyebrow">${o.resp === me.id ? "Você é o responsável" : "Responsável: " + esc(emp(o.resp).name)}</div><h2 style="font-size:20px;margin-top:4px">${esc(c.name)}</h2><div style="color:var(--muted)">${esc(o.title)}</div></div>${stChip(o)}</div>
   <div class="meta" style="margin-bottom:12px">${o.addr ? `<span>📍 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.addr)}" target="_blank" rel="noopener">${esc(o.addr)}</a></span>` : ""}<span>${prazo(o)}</span></div>
+  ${alertaObra(o)}
   ${progLine(o)}
   ${mapaObra(o)}
   ${o.notes ? `<div class="note"><b>Recado do escritório:</b> ${esc(o.notes)}</div>` : ""}
@@ -861,6 +868,131 @@ function obraForm(o) {
   };
 }
 VIEWS.obr = () => me.role === "tec" ? viewObrasTec() : viewObrasAdmin();
+/* ---------- Lembretes (só administradores) ---------- */
+const URG = { urgente: ["Urgente", "c-bad"], normal: ["Normal", "c-info"], lembrar: ["Só lembrar", "c-mute"] };
+const URG_ORD = { urgente: 0, normal: 1, lembrar: 2 };
+const lemPend = () => lembretes.filter(l => !l.done).sort((a, b) => URG_ORD[a.urg] - URG_ORD[b.urg] || (a.due || "9999").localeCompare(b.due || "9999") || String(a.at).localeCompare(String(b.at)));
+const dueTxt = l => !l.due ? "" : l.due < HOJE ? `<span class="down">Atrasado · era para ${fd(l.due)}</span>` : l.due === HOJE ? `<b>Para hoje</b>` : l.due === addDays(HOJE, 1) ? "Para amanhã" : `Até ${fd(l.due)}`;
+let lemUrg = "normal";
+function addLembrete(d, okMsg = "Lembrete salvo") {
+  return act(async () => {
+    if (DEMO) { lembretes.push({ id: nextId(lembretes), ...d, done: false, at: new Date().toISOString() }); return }
+    await live(sb.from("ga_lembretes").insert({ titulo: d.title, obs: d.obs || null, urgencia: d.urg, data: d.due || null }));
+  }, okMsg);
+}
+const faltaJaLembrada = m => lembretes.some(l => l.falta === m.id || l.title.includes(m.item));
+function lemFromFalta(m) {
+  const o = m.o || obras.find(x => x.missing.includes(m));
+  return { title: `Comprar ${m.item}${m.qty ? ` (${m.qty})` : ""}`, obs: `${clientById(o.client).name} · pedido de ${emp(m.by).name} em ${fd(m.d)}${m.urgent ? " · está parando a obra" : ""}`, urg: m.urgent ? "urgente" : "normal", due: m.urgent ? HOJE : addDays(HOJE, 2), falta: m.id };
+}
+VIEWS.lem = () => {
+  const pend = lemPend(), feitos = lembretes.filter(l => l.done).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 15);
+  const sug = openMissing().filter(m => !faltaJaLembrada(m));
+  const row = l => `<div class="row lem ${l.done ? "done" : ""}"><input type="checkbox" class="lem-ck" data-ck="${l.id}" ${l.done ? "checked" : ""} aria-label="Marcar como feito"><div class="grow"><div class="t">${esc(l.title)}</div>${l.obs ? `<div class="s">${esc(l.obs)}</div>` : ""}${l.due && !l.done ? `<div class="s">${dueTxt(l)}</div>` : ""}</div><span class="chip ${URG[l.urg][1]}">${URG[l.urg][0]}</span><button class="btn sm ghost" data-rm="${l.id}" aria-label="Excluir">Excluir</button></div>`;
+  $("#main").innerHTML = head("Lembretes", "Tarefas e coisas para não esquecer. Os urgentes aparecem quando você entra no app.") + `
+ ${lemMissing ? `<div class="card note-warn">Para salvar lembretes, rode uma vez o arquivo <b>supabase/002_lembretes.sql</b> no SQL Editor do Supabase.</div>` : ""}
+ <div class="grid two">
+  <form class="card lem-form" id="lmF" autocomplete="off">
+   <div class="card-head" style="margin-bottom:4px"><h2>Novo lembrete</h2></div>
+   <div class="field"><label for="lmT">O que precisa lembrar ou fazer?</label><input class="input" id="lmT" placeholder="Ex.: Ligar para o Ricardo sobre o prazo"></div>
+   <div class="field"><label>Urgência</label><div class="tabs" id="lmU">${Object.entries(URG).map(([k, [l]]) => `<button type="button" data-u="${k}" class="${k === lemUrg ? "active" : ""}">${l}</button>`).join("")}</div></div>
+   <div class="form-grid"><div class="field"><label for="lmD">Para quando (opcional)</label><input class="input" type="date" id="lmD"></div><div class="field"><label for="lmO">Observação (opcional)</label><input class="input" id="lmO" placeholder="Detalhes, telefone, valor"></div></div>
+   <p class="s form-err" id="lmErr" hidden></p>
+   <div style="display:flex;justify-content:flex-end"><button class="btn primary" type="submit">Adicionar lembrete</button></div>
+  </form>
+  <div class="card"><div class="card-head"><h2>Sugestões das obras</h2></div><div class="list">${sug.length ? sug.map(m => `<div class="row"><div class="grow"><div class="t">Comprar ${esc(m.item)}${m.qty ? " · " + esc(m.qty) : ""}</div><div class="s">${esc(clientById(m.o.client).name)} · pedido por ${esc(emp(m.by).name)}</div></div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : ""}<button class="btn sm" data-sug="${m.id}">+ Lembrete</button></div>`).join("") : `<p class="s" style="margin:0">Quando alguém da equipe pedir peça ou material, aparece aqui para virar lembrete.</p>`}</div></div>
+ </div>
+ <div class="card" style="margin-top:14px"><div class="card-head"><h2>Para fazer</h2><span class="s">${pend.length} ${pend.length === 1 ? "lembrete" : "lembretes"}</span></div><div class="list">${pend.length ? pend.map(row).join("") : `<p class="s" style="margin:0">Nada pendente. 👏</p>`}</div></div>
+ ${feitos.length ? `<div class="card" style="margin-top:14px"><div class="card-head"><h2>Feitos</h2></div><div class="list">${feitos.map(row).join("")}</div></div>` : ""}`;
+  $$("#lmU button").forEach(b => b.onclick = () => { lemUrg = b.dataset.u; $$("#lmU button").forEach(x => x.classList.toggle("active", x === b)) });
+  $("#lmF").onsubmit = e => {
+    e.preventDefault();
+    const title = $("#lmT").value.trim();
+    if (!title) { $("#lmErr").textContent = "Escreva o que precisa lembrar."; $("#lmErr").hidden = false; return }
+    addLembrete({ title, obs: $("#lmO").value.trim(), urg: lemUrg, due: $("#lmD").value || null }).then(ok => { if (ok) lemUrg = "normal" });
+  };
+  $$("#main [data-sug]").forEach(b => b.onclick = () => { const m = openMissing().find(x => x.id == b.dataset.sug); addLembrete(lemFromFalta(m), "Virou lembrete") });
+  $$("#main [data-ck]").forEach(cb => cb.onchange = () => {
+    const l = lembretes.find(x => x.id == cb.dataset.ck), done = cb.checked;
+    act(async () => { if (DEMO) l.done = done; else await live(sb.from("ga_lembretes").update({ feito: done, feito_em: done ? new Date().toISOString() : null }).eq("id", l.id)) }, done ? "Feito ✓" : "Voltou para a lista");
+  });
+  $$("#main [data-rm]").forEach(b => twoStep(b, "Confirmar", () => { const id = lembretes.find(x => x.id == b.dataset.rm).id; act(async () => { if (DEMO) lembretes = lembretes.filter(l => l.id !== id); else await live(sb.from("ga_lembretes").delete().eq("id", id)) }, "Lembrete excluído") }));
+};
+
+/* =====================================================================
+   AVISOS AO ENTRAR
+   dono/admin: o que mudou nas obras desde a última vez, dicas e reconhecimento
+   funcionário: uma vez por dia, o que fazer hoje e como está o prazo
+   ===================================================================== */
+const diasEntre = (a, b) => Math.round((D(b) - D(a)) / 864e5);
+function dicas(o) {
+  const out = [], resp = firstName(emp(o.resp).name), gap = expected(o) - o.pct, d = daysLeft(o);
+  const urg = o.missing.filter(m => m.st === "Aberto" && m.urgent), last = o.log[0], sem = last ? diasEntre(last.d, HOJE) : diasEntre(o.start, HOJE);
+  if (urg.length) out.push(`Compre já <b>${esc(urg[0].item)}</b>: ${esc(firstName(emp(urg[0].by).name))} avisou que isso está parando a obra.`);
+  if (sem >= 2) out.push(`Sem feedback há ${sem} dias. Ligue para ${esc(resp)} e veja o que está travando.`);
+  if (gap >= 15) out.push(`Está ${gap} pontos atrás do esperado. Vale reforçar a equipe com mais uma pessoa por alguns dias.`);
+  else if (gap > 0) out.push(`Combine com ${esc(resp)} uma meta por dia para recuperar os ${gap}% até ${fd(addDays(HOJE, 7))}.`);
+  if (d < 0) out.push(`O prazo venceu há ${-d} dias. Alinhe uma nova data com o cliente.`);
+  else if (d <= 7) out.push(`Faltam ${d} dias para o prazo. Se precisar de mais tempo, avise o cliente antes.`);
+  const prob = o.log.slice(0, 5).find(l => l.problem);
+  if (prob) out.push(`Problema relatado em ${fd(prob.d)}: “${esc(prob.problem)}”`);
+  return out.slice(0, 3);
+}
+function alertaObra(o) {
+  if (o.pct >= 100 || TODAY < D(o.start)) return "";
+  const st = obraStatus(o)[0], gap = expected(o) - o.pct;
+  if (st === "Atrasada") return `<div class="alerta"><span class="sirene" aria-hidden="true">🚨</span><div><b>Obra atrasada</b><br>${daysLeft(o) < 0 ? `O prazo venceu há ${-daysLeft(o)} dias.` : `Está ${gap}% atrás do esperado para hoje.`} Hoje é dia de acelerar.</div></div>`;
+  if (st === "Adiantada") return `<div class="boa"><span aria-hidden="true">🚀</span><div><b>Vocês estão adiantados!</b><br>Terminem o quanto antes para seguir para a próxima obra.</div></div>`;
+  return "";
+}
+function welcome() {
+  if (!me || $("#modalRoot").innerHTML) return;
+  if (me.role === "admin") welcomeAdmin(); else if (me.role === "tec") welcomeTec();
+}
+function welcomeAdmin() {
+  const key = "ga-visto-" + me.id, seen = (() => { try { return JSON.parse(store.get(key) || "null") } catch (e) { return null } })();
+  const ontem = addDays(HOJE, -1), novo = (x, k) => !seen ? x.d >= ontem : DEMO || x.id == null ? x.d > seen.day : x.id > (seen[k] || 0);
+  const logs = obras.flatMap(o => o.log.map(l => ({ ...l, o })));
+  const fbNovos = logs.filter(l => novo(l, "fb")), faltas = openMissing(), faltasNovas = faltas.filter(m => novo(m, "fa"));
+  const primeiraHoje = !seen || seen.day !== HOJE;
+  const maxId = arr => arr.reduce((m, x) => Math.max(m, typeof x.id === "number" ? x.id : 0), 0);
+  store.set(key, JSON.stringify({ day: HOJE, fb: maxId(logs), fa: maxId(obras.flatMap(o => o.missing)) }));
+  if (!primeiraHoje && !fbNovos.length && !faltasNovas.length) return;
+  const act = activeObras(), late = act.filter(o => obraStatus(o)[0] === "Atrasada"), adi = act.filter(o => obraStatus(o)[0] === "Adiantada");
+  const porObra = [...new Map(fbNovos.sort((a, b) => b.d.localeCompare(a.d)).map(l => [l.o.id, l])).values()].reverse().sort((a, b) => b.d.localeCompare(a.d));
+  const tecs = staff.filter(e => e.active && e.access === "tec"), rates = tecs.map(fbRate).filter(r => r !== null), emDia = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : null;
+  const lemHoje = lemPend().filter(l => l.urg === "urgente" || (l.due && l.due <= HOJE));
+  modal(`<div class="sheet-head"><div><div class="eyebrow">${hojeLongo()}</div><h2>${saudacao()}, ${esc(firstName(me.name))}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ ${!late.length && act.length ? `<div class="boa"><span aria-hidden="true">🏆</span><div><b>A equipe está mandando bem!</b><br>Todas as ${act.length} obras estão no prazo${emDia !== null ? ` e os feedbacks estão ${emDia}% em dia` : ""}.${adi.length ? ` ${adi.map(o => esc(firstName(emp(o.resp).name))).filter((v, i, a) => a.indexOf(v) === i).join(" e ")} ${adi.length > 1 ? "estão" : "está"} adiantado${adi.length > 1 ? "s" : ""}: vale um elogio.` : ""}</div></div>` : ""}
+ ${late.length ? `<div class="w-sec"><div class="eyebrow">Precisa de atenção · ${late.length} ${late.length > 1 ? "obras atrasadas" : "obra atrasada"}</div>${late.map(o => `<div class="w-obra bad"><div class="w-top"><b>${esc(clientById(o.client).name)}</b><span class="chip c-bad">${o.pct}% · esperado ${expected(o)}%</span></div><ul class="dicas">${dicas(o).map(t => `<li>${t}</li>`).join("")}</ul></div>`).join("")}${adi.length ? `<p class="s" style="margin:0">👏 ${adi.map(o => `${esc(firstName(emp(o.resp).name))} está adiantado em ${esc(clientById(o.client).name)}`).join("; ")}.</p>` : ""}</div>` : ""}
+ ${porObra.length ? `<div class="w-sec"><div class="eyebrow">Feedbacks novos · ${fbNovos.length}</div>${porObra.map(l => `<div class="w-obra"><div class="w-top"><b>${esc(clientById(l.o.client).name)}</b><span class="s">${fd(l.d)} · ${esc(emp(l.who).name)} · ${l.pct}%</span></div><div class="s">${esc(l.text)}</div>${l.problem ? `<div class="down" style="font-size:13px">⚠ ${esc(l.problem)}</div>` : ""}</div>`).join("")}</div>` : act.length ? `<p class="s" style="margin:0">Nenhum feedback novo desde a última vez.</p>` : ""}
+ ${faltas.length ? `<div class="w-sec"><div class="eyebrow">Faltando material · ${faltas.length}</div>${faltas.map(m => `<div class="row"><div class="grow"><div class="t">${esc(m.item)}${m.qty ? " · " + esc(m.qty) : ""}${faltasNovas.includes(m) ? ' <span class="chip c-info">Novo</span>' : ""}</div><div class="s">${esc(clientById(m.o.client).name)} · ${esc(emp(m.by).name)}</div></div>${m.urgent ? '<span class="chip c-bad">Parou a obra</span>' : ""}${faltaJaLembrada(m) ? "" : `<button class="btn sm" data-wl="${m.id}">+ Lembrete</button>`}</div>`).join("")}</div>` : ""}
+ ${lemHoje.length ? `<div class="w-sec"><div class="eyebrow">Seus lembretes para hoje</div>${lemHoje.map(l => `<div class="row"><div class="grow"><div class="t">${esc(l.title)}</div>${l.due ? `<div class="s">${dueTxt(l)}</div>` : ""}</div><span class="chip ${URG[l.urg][1]}">${URG[l.urg][0]}</span></div>`).join("")}</div>` : ""}
+ <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${lemHoje.length ? '<button class="btn" data-wgo="lem">Ver lembretes</button>' : ""}<button class="btn primary" data-wgo="obr">Ver obras</button></div>`, true);
+  $$("#modalRoot [data-wgo]").forEach(b => b.onclick = () => { closeModal(); go(b.dataset.wgo) });
+  $$("#modalRoot [data-wl]").forEach(b => b.onclick = async () => { const m = faltas.find(x => x.id == b.dataset.wl); b.disabled = true; if (await addLembrete(lemFromFalta(m), "Virou lembrete")) { b.replaceWith(Object.assign(document.createElement("span"), { className: "chip c-good", textContent: "Lembrete criado" })) } else b.disabled = false });
+}
+function welcomeTec() {
+  const key = "ga-dia-" + me.id;
+  if (store.get(key) === HOJE) return;
+  const mine = myObras(), act = mine.filter(o => TODAY >= D(o.start) && o.pct < 100), logo = mine.filter(o => o.start > HOJE && o.start <= addDays(HOJE, 2));
+  if (!act.length && !logo.length) return;
+  store.set(key, HOJE);
+  const bloco = o => {
+    const st = obraStatus(o)[0], next = o.tasks.filter(t => !t[1]).slice(0, 2), urg = o.missing.filter(m => m.st === "Aberto");
+    const topo = st === "Atrasada" ? `<div class="alerta"><span class="sirene" aria-hidden="true">🚨</span><div><b>Emergência: obra atrasada</b><br>${daysLeft(o) < 0 ? `O prazo venceu há ${-daysLeft(o)} dias.` : `Está ${expected(o) - o.pct}% atrás do esperado.`} Hoje o foco total é recuperar.</div></div>`
+      : st === "Adiantada" ? `<div class="boa"><span aria-hidden="true">🚀</span><div><b>Vocês estão adiantados!</b><br>Mandem bem e terminem logo: a próxima obra já está esperando.</div></div>`
+      : `<div class="ok-msg"><span aria-hidden="true">👍</span><div><b>No ritmo certo.</b><br>Mantendo assim, a entrega fica para ${fd(o.end)}.</div></div>`;
+    return `<div class="w-obra ${st === "Atrasada" ? "bad" : ""}"><div class="w-top"><b>${esc(clientById(o.client).name)}</b><span class="s">${o.pct}% pronto</span></div>${topo}
+   <div class="eyebrow" style="margin-top:4px">Hoje você deve</div><ul class="dicas">${next.map(t => `<li>${esc(t[0])}</li>`).join("") || "<li>Finalizar os detalhes e preparar a entrega</li>"}${todayDone(o) ? "" : "<li>Enviar o feedback do dia com fotos</li>"}</ul>
+   ${o.notes ? `<div class="s"><b>Recado do escritório:</b> ${esc(o.notes)}</div>` : ""}${urg.length ? `<div class="s">O escritório já sabe que falta: ${urg.map(m => esc(m.item)).join(", ")}.</div>` : ""}</div>`;
+  };
+  modal(`<div class="sheet-head"><div><div class="eyebrow">${hojeLongo()}</div><h2>${saudacao()}, ${esc(firstName(me.name))}!</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ ${act.map(bloco).join("")}
+ ${logo.length ? `<div class="w-sec"><div class="eyebrow">Começa logo</div>${logo.map(o => `<div class="s"><b style="color:var(--fg)">${esc(clientById(o.client).name)}</b> começa ${o.start === addDays(HOJE, 1) ? "amanhã" : "em " + fd(o.start)}.</div>`).join("")}</div>` : ""}
+ <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${act.length ? `<button class="btn" data-wfb="${act[0].id}">Enviar feedback agora</button>` : ""}<button class="btn primary" data-close>Bora trabalhar</button></div>`);
+  const fb = $("#modalRoot [data-wfb]"); if (fb) fb.onclick = () => feedbackForm(obras.find(o => o.id == fb.dataset.wfb));
+}
 
 /* ---------- Funcionários (só o dono/admin) ---------- */
 const ACCESS = { tec: ["Funcionário", "Só a aba Obras: tarefas, feedback do dia e pedidos de material"], fin: ["Financeiro", "Financeiro, orçamentos, clientes e relatórios"], admin: ["Administrador", "Acesso completo, igual ao dono"] };
