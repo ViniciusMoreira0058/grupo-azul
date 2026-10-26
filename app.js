@@ -297,8 +297,8 @@ const ICON = {
 const PAGES = [["dash", "Dashboard"], ["obr", "Obras"], ["lem", "Lembretes"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"], ["usr", "Usuários"]];
 const ALLOWED = { admin: PAGES.map(p => p[0]), fin: ["dash", "cli", "orc", "fin", "rel"], tec: ["obr"] };
 const SOON = [["est", "Estoque"], ["os", "Ordens de serviço"]];
-// aba Usuários: só a conta de suporte (Vinicius). Por enquanto só na demonstração, aguardando aprovação
-const souSuporte = () => DEMO && me.role === "admin";
+// aba Usuários: só a conta de suporte oculta (Vinicius). Na demonstração aparece para o dono, para mostrar como fica
+const souSuporte = () => me.role === "admin" && (DEMO || !!(staff.find(e => e.id === me.id) || {}).oculto);
 const can = p => p === "usr" ? souSuporte() : ALLOWED[me.role].includes(p);
 function renderNav() {
   const pages = PAGES.filter(p => can(p[0]));
@@ -324,6 +324,7 @@ function enterApp() {
   $("#today").textContent = `${DIA[TODAY.getDay()].slice(0, 3)}, ${TODAY.getDate()} ${MES3[TODAY.getMonth()].toLowerCase()}`;
   const h = location.hash.slice(1); go(PAGES.some(p => p[0] === h) ? h : ALLOWED[me.role][0]);
   setTimeout(welcome, 80);
+  iniciarPresenca();
 }
 
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.setAttribute("role", "status"); document.body.appendChild(t); setTimeout(() => t.remove(), 3200) }
@@ -1210,10 +1211,34 @@ function quandoTxt(min) {
   if (min < 60 * 48) return `Ontem às ${hh}`;
   return `${d.toLocaleDateString("pt-BR")} às ${hh}`;
 }
+// presença: o app avisa ao abrir e a cada minuto enquanto está na tela (precisa do 006_usuarios_presenca.sql)
+const aparelho = () => /iPhone|iPad/i.test(navigator.userAgent) ? "iPhone" : /Android/i.test(navigator.userAgent) ? "Celular Android" : "Computador";
+let presencaTimer = null;
+function iniciarPresenca() {
+  if (DEMO || presencaTimer) return;
+  const marcar = abriu => sb.rpc("ga_marcar_presenca", { p_aparelho: aparelho(), p_abriu: abriu }).then(() => { }, () => { });
+  marcar(true);
+  presencaTimer = setInterval(() => { if (document.visibilityState === "visible") marcar(false) }, 60000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") marcar(true) });
+}
+let usrDados = null, usrErro = false, usrTimer = null;
+async function carregarUsuarios() {
+  try {
+    const lista = await live(sb.rpc("ga_usuarios")) || [];
+    usrDados = lista.map(u => ({ e: { id: u.id, name: u.nome, role: u.funcao, access: u.acesso, active: u.ativo }, min: u.visto_em ? Math.max(0, Math.round((Date.now() - new Date(u.visto_em)) / 6e4)) : null, apar: u.aparelho || "", acessos: +u.acessos7 || 0, entrou: u.entrou }));
+    usrErro = false;
+  } catch (e) { usrErro = true }
+  if (current === "usr") VIEWS.usr();
+}
 VIEWS.usr = () => {
-  const ps = presencaDemo().sort((a, b) => (a.min ?? 1e9) - (b.min ?? 1e9));
-  const on = ps.filter(p => p.min != null && p.min < 5), hoje = ps.filter(p => p.min != null && p.min < 60 * 24), sem = ps.filter(p => p.min != null && p.min < 60 * 24 * 7), nunca = ps.filter(p => p.min == null && p.e.active);
-  $("#main").innerHTML = head("Usuários", "Quem está usando o app e quando foi o último acesso de cada um") + `
+  if (!DEMO) {
+    clearTimeout(usrTimer); usrTimer = setTimeout(() => { if (current === "usr") carregarUsuarios() }, 60000);
+    if (usrErro) { $("#main").innerHTML = head("Usuários", "Quem está usando o app") + `<div class="card note-warn">Para ver quem está usando o app, rode uma vez o arquivo <b>supabase/006_usuarios_presenca.sql</b> no SQL Editor do Supabase.</div>`; return }
+    if (!usrDados) { $("#main").innerHTML = head("Usuários", "Carregando…"); carregarUsuarios(); return }
+  }
+  const ps = (DEMO ? presencaDemo() : usrDados).sort((a, b) => (a.min ?? 1e9) - (b.min ?? 1e9));
+  const on = ps.filter(p => p.min != null && p.min < 5), hoje = ps.filter(p => p.min != null && p.min < 60 * 24), sem = ps.filter(p => p.min != null && p.min < 60 * 24 * 7), nunca = ps.filter(p => p.min == null && p.e.active && !p.entrou);
+  $("#main").innerHTML = head("Usuários", "Quem está usando o app e quando foi o último acesso de cada um", DEMO ? "" : `<button class="btn" id="usrAt">Atualizar</button>`) + `
  <div class="note" style="margin:0 0 14px">🔒 Só você vê esta aba. Os outros administradores não sabem que ela existe.</div>
  <div class="grid kpis" style="margin-bottom:14px">
   <div class="card kpi"><div class="eyebrow">Usando agora</div><div class="v num up">${on.length}</div><div class="d">Ativos nos últimos 5 min</div></div>
@@ -1221,7 +1246,8 @@ VIEWS.usr = () => {
   <div class="card kpi"><div class="eyebrow">Últimos 7 dias</div><div class="v num">${sem.length}</div><div class="d">de ${ps.filter(p => p.e.active).length} com acesso ativo</div></div>
   <div class="card kpi"><div class="eyebrow">Nunca entraram</div><div class="v num ${nunca.length ? "down" : ""}">${nunca.length}</div><div class="d">Cadastrados sem criar a senha</div></div>
  </div>
- <div class="card"><div class="list">${ps.map(p => { const agora = p.min != null && p.min < 5; return `<div class="row"><span class="dot-on ${agora ? "on" : p.min != null && p.min < 1440 ? "hoje" : ""}" title="${agora ? "Usando agora" : ""}"></span><div class="grow"><div class="t">${esc(p.e.name)}${p.e.id === me.id ? ' <span class="s">(você)</span>' : ""}</div><div class="s">${esc(p.e.role)} · ${ACCESS[p.e.access][0]}${p.e.active ? "" : " · acesso desativado"}${p.min != null ? ` · ${p.apar} · ${p.acessos} ${p.acessos === 1 ? "acesso" : "acessos"} na semana` : ""}</div></div><div style="text-align:right;white-space:nowrap"><b class="${agora ? "up" : p.min == null ? "down" : ""}">${agora ? "Usando agora" : quandoTxt(p.min)}</b>${agora || p.min == null ? "" : '<div class="s">último uso</div>'}</div></div>` }).join("")}</div></div>`;
+ <div class="card"><div class="list">${ps.map(p => { const agora = p.min != null && p.min < 5; return `<div class="row"><span class="dot-on ${agora ? "on" : p.min != null && p.min < 1440 ? "hoje" : ""}" title="${agora ? "Usando agora" : ""}"></span><div class="grow"><div class="t">${esc(p.e.name)}${p.e.id === me.id ? ' <span class="s">(você)</span>' : ""}</div><div class="s">${esc(p.e.role)} · ${ACCESS[p.e.access][0]}${p.e.active ? "" : " · acesso desativado"}${p.min != null ? ` · ${p.apar} · ${p.acessos} ${p.acessos === 1 ? "acesso" : "acessos"} na semana` : ""}</div></div><div style="text-align:right;white-space:nowrap"><b class="${agora ? "up" : p.min == null && !p.entrou ? "down" : ""}">${agora ? "Usando agora" : p.min == null && p.entrou ? "Sem registro ainda" : quandoTxt(p.min)}</b>${agora || p.min == null ? "" : '<div class="s">último uso</div>'}</div></div>` }).join("")}</div></div>`;
+  const at = $("#usrAt"); if (at) at.onclick = () => { $("#main").querySelector("h1").textContent = "Atualizando…"; carregarUsuarios() };
 };
 /* ---------- Lembretes (só administradores) ---------- */
 const URG = { urgente: ["Urgente", "c-bad"], normal: ["Normal", "c-info"], lembrar: ["Só lembrar", "c-mute"] };
