@@ -146,9 +146,30 @@ function loadDemo() {
 let busyN = 0;
 function busy(on) { busyN += on ? 1 : -1; document.body.classList.toggle("busy", busyN > 0) }
 function render() { if (VIEWS[current]) VIEWS[current](); if (me) renderNav() }
+// redesenha a tela atual sem perder a posição de rolagem
+function redesenhar() { const y = window.scrollY; render(); window.scrollTo(0, y) }
+
+// mantém os dados em dia com o que os outros fazem: ao voltar para o app e a cada 45 s
+let syncTimer = null, syncEm = 0, syncRodando = false;
+async function sincronizar(forcar) {
+  if (DEMO || !me || syncRodando || busyN > 0) return;
+  if (!forcar && Date.now() - syncEm < 20000) return;
+  const m = $("#modalRoot"), foco = document.activeElement;
+  if ((m && m.innerHTML.trim()) || (foco && /INPUT|TEXTAREA|SELECT/.test(foco.tagName))) return; // não atrapalha quem está digitando
+  syncRodando = true;
+  try { await reload(); syncEm = Date.now(); const m2 = $("#modalRoot"); if (!(m2 && m2.innerHTML.trim())) redesenhar() } catch (e) { console.warn("sincronizar", e) }
+  finally { syncRodando = false }
+}
+function iniciarSync() {
+  if (DEMO || syncTimer) return;
+  syncEm = Date.now();
+  syncTimer = setInterval(() => { if (document.visibilityState === "visible") sincronizar() }, 45000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sincronizar() });
+  window.addEventListener("online", () => sincronizar(true));
+}
 // roda uma alteração: na demonstração mexe só na memória; no real grava e recarrega
 async function act(fn, okMsg) {
-  try { busy(true); await fn(); if (!DEMO) await reload(); render(); if (okMsg) toast(okMsg); return true }
+  try { busy(true); await fn(); if (!DEMO) await reload(); redesenhar(); if (okMsg) toast(okMsg); return true }
   catch (e) { console.error(e); toast("Não foi possível salvar. " + friendly(e)); return false }
   finally { busy(false) }
 }
@@ -325,6 +346,7 @@ function enterApp() {
   const h = location.hash.slice(1); go(PAGES.some(p => p[0] === h) ? h : ALLOWED[me.role][0]);
   setTimeout(welcome, 80);
   iniciarPresenca();
+  iniciarSync();
 }
 
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.setAttribute("role", "status"); document.body.appendChild(t); setTimeout(() => t.remove(), 3200) }
@@ -1059,7 +1081,7 @@ function viewObrasTec() {
   $$("#main [data-task]").forEach(cb => cb.onchange = () => {
     const [oid, i] = cb.dataset.task.split(":"), o = obras.find(x => x.id == oid);
     o.tasks[i][1] = cb.checked;
-    if (!DEMO) live(sb.rpc("ga_atualizar_etapas", { p_obra: o.id, p_etapas: o.tasks.map(t => ({ t: t[0], ok: t[1] })) })).catch(e => { cb.checked = !cb.checked; o.tasks[i][1] = cb.checked; toast("Não foi possível salvar. " + friendly(e)) });
+    if (!DEMO) live(sb.rpc("ga_atualizar_etapas", { p_obra: o.id, p_etapas: o.tasks.map(t => ({ t: t[0], ok: t[1] })) })).then(() => { cb.blur(); sincronizar(true) }, e => { cb.checked = !cb.checked; o.tasks[i][1] = cb.checked; toast("Não foi possível salvar. " + friendly(e)) });
   });
 }
 function obraCardTec(o) {
