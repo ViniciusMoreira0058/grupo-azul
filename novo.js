@@ -333,7 +333,7 @@ if (DEMO) (() => {
      3. AGENDA
      ===================================================================== */
   let eventos = [], agMes = HOJE.slice(0, 7), agDia = HOJE, agQuem = "";
-  const TIPOS = { visita: ["Visita técnica", "🔎", "c-info"], orc: ["Medição / orçamento", "📐", "c-warn"], manut: ["Manutenção", "🔧", "c-good"], entrega: ["Entrega da obra", "🔑", "c-good"], reuniao: ["Reunião", "👥", "c-mute"], obra: ["Dia de obra", "🏗️", "c-mute"] };
+  const TIPOS = { visita: ["Visita técnica", "🔎", "c-info"], orc: ["Medição / orçamento", "📐", "c-warn"], manut: ["Manutenção", "🔧", "c-good"], entrega: ["Entrega da obra", "🔑", "c-good"], reuniao: ["Reunião", "👥", "c-mute"], confra: ["Confraternização", "🎉", "c-info"], obra: ["Dia de obra", "🏗️", "c-mute"] };
   function seedAgenda() {
     const ev = (d, h, tipo, titulo, cli, quem, extra = {}) => eventos.push({ id: eventos.length + 1, d: proxUtil(addDays(HOJE, d)), h, tipo, titulo, cli, quem, local: cli ? (obras.find(o => o.client === cli) || {}).addr || clientById(cli).city : "", obs: "", feito: d < 0, equipeVe: ["visita", "manut", "entrega"].includes(tipo) && quem.some(id => emp(id).access === "tec"), ...extra });
     ev(0, "08:00", "manut", "Troca do reparo da válvula de descarga", 6, ["e7"]);
@@ -350,6 +350,7 @@ if (DEMO) (() => {
     ev(12, "10:00", "reuniao", "Reunião com o arquiteto do Loft", 18, ["e0", "e11"]);
     ev(15, "08:00", "manut", "Manutenção preventiva das bombas", 17, ["e7"]);
     ev(19, "13:30", "orc", "Orçamento troca de prumadas (bloco B)", 2, ["e0"]);
+    ev(4, "18:00", "confra", "Churrasco de fim de mês da equipe", null, staff.filter(e => e.active && (e.access === "tec" || e.dono)).map(e => e.id), { local: "Depósito do Grupo Azul", obs: "Carne e bebida por conta da empresa. Pode levar a família!", equipeVe: true });
     ev(-1, "09:00", "visita", "Infiltração na garagem", 12, ["e8"]);
     ev(-2, "15:00", "orc", "Medição do vestiário novo", 10, ["e0"]);
     ev(-4, "08:00", "manut", "Troca do pressurizador", 13, ["e3"]);
@@ -424,17 +425,18 @@ if (DEMO) (() => {
  <div class="field"><label for="efTi">O que é</label><input class="input" id="efTi" value="${esc(v.titulo)}" placeholder="Ex.: Vazamento no banheiro da suíte"></div>
  <div class="form-grid"><div class="field"><label for="efD">Dia</label><input class="input" type="date" id="efD" value="${v.d}"></div><div class="field"><label for="efH">Hora</label><input class="input" type="time" id="efH" value="${v.h}"></div>
  <div class="field"><label for="efC">Cliente (opcional)</label><select class="input" id="efC"><option value="">—</option>${clients.map(c => `<option value="${c.id}" ${c.id === v.cli ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div><div class="field"><label for="efL">Endereço</label><input class="input" id="efL" value="${esc(v.local)}" placeholder="Rua, número · bairro"></div></div>
- <div class="field"><label>Quem vai</label><div style="display:flex;flex-wrap:wrap;gap:4px 16px">${pessoas.map(x => `<label class="task"><input type="checkbox" id="efQ_${x.id}" ${v.quem.includes(x.id) ? "checked" : ""}><span>${esc(x.name)}</span></label>`).join("")}</div></div>
+ <div class="field"><label>Quem vai</label><div style="display:flex;flex-wrap:wrap;gap:4px 16px">${pessoas.map(x => `<label class="task"><input type="checkbox" id="efQ_${x.id}" ${v.quem.includes(x.id) ? "checked" : ""}><span>${esc(x.name)}</span></label>`).join("")}</div><button type="button" class="btn sm" id="efTodos" style="justify-self:start">Marcar toda a equipe</button></div>
  <div class="field"><label for="efO">Observação (opcional)</label><textarea class="input" id="efO" placeholder="Ex.: levar escada e detector de vazamento">${esc(v.obs)}</textarea></div>
  <label class="task et-fim"><input type="checkbox" id="efVe" ${v.equipeVe ? "checked" : ""}><span><b>Mostrar na agenda do funcionário</b><br><span class="s">Quem vai recebe esse compromisso na agenda dele. Se não marcar, só o escritório vê.</span></span></label>
  <p class="s" id="efConf" style="margin:0"></p><p class="s form-err" id="efErr" hidden></p>
  <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="efSave">Salvar</button></div>`, true);
     let tipo = v.tipo;
-    $$("#efT button").forEach(b => b.onclick = () => { tipo = b.dataset.t; $$("#efT button").forEach(x => x.classList.toggle("active", x === b)) });
+    $$("#efT button").forEach(b => b.onclick = () => { tipo = b.dataset.t; $$("#efT button").forEach(x => x.classList.toggle("active", x === b)); conf(); if (tipo === "confra") { $("#efVe").checked = true; if (!$("#efTi").value) $("#efTi").placeholder = "Ex.: Churrasco de fim de ano da equipe" } });
+    $("#efTodos").onclick = () => { pessoas.forEach(x => $("#efQ_" + x.id).checked = true); conf() };
     $("#efC").onchange = () => { const id = +$("#efC").value, o = obras.find(x => x.client === id); if (id && !$("#efL").value) $("#efL").value = o ? o.addr : clientById(id).city };
     // avisa se alguém já tem compromisso ou obra no mesmo dia
     const conf = () => { const d = $("#efD").value, h = $("#efH").value, q = pessoas.filter(x => $("#efQ_" + x.id).checked).map(x => x.id), msgs = [];
-      q.forEach(id => { const ch = eventos.find(x => x !== e && x.d === d && x.h === h && x.quem.includes(id)); if (ch) msgs.push(`${firstName(emp(id).name)} já tem "${ch.titulo}" nesse horário`); const ob = obrasNoDia(d).find(o => o.pct < 100 && (o.resp === id || o.team.includes(id))); if (ob) msgs.push(`${firstName(emp(id).name)} está escalado na obra ${clientById(ob.client).name}`) });
+      q.forEach(id => { const ch = eventos.find(x => x !== e && x.d === d && x.h === h && x.quem.includes(id)); if (ch) msgs.push(`${firstName(emp(id).name)} já tem "${ch.titulo}" nesse horário`); const ob = tipo !== "confra" && h < "17:00" && obrasNoDia(d).find(o => o.pct < 100 && (o.resp === id || o.team.includes(id))); if (ob) msgs.push(`${firstName(emp(id).name)} está escalado na obra ${clientById(ob.client).name}`) });
       $("#efConf").innerHTML = msgs.length ? `⚠️ ${msgs.map(esc).join(" · ")}` : "" };
     ["#efD", "#efH"].forEach(s => $(s).onchange = conf); $$("#modalRoot [id^=efQ_]").forEach(x => x.onchange = conf); conf();
     $("#efSave").onclick = () => {
@@ -537,6 +539,82 @@ if (DEMO) (() => {
     badge("agd", eventos.filter(e => e.d === HOJE && !e.feito && (me.role !== "tec" || (e.equipeVe && e.quem.includes(me.id)))).length, "info");
   };
 
+  // funcionário: ao entrar, aviso do que o escritório colocou na agenda dele
+  const sigEv = e => `${e.d}|${e.h}|${e.titulo}`;
+  function avisoAgenda() {
+    if (!me || me.role !== "tec") return;
+    const key = "ga-agvisto-" + me.id; let vistos = []; try { vistos = JSON.parse(store.get(key) || "[]") } catch (e) { }
+    const novos = eventos.filter(e => e.equipeVe && e.quem.includes(me.id) && e.d >= HOJE && !vistos.includes(sigEv(e))).sort((a, b) => (a.d + a.h).localeCompare(b.d + b.h));
+    if (!novos.length) return;
+    store.set(key, JSON.stringify([...vistos, ...novos.map(sigEv)].slice(-200)));
+    const confra = novos.find(e => e.tipo === "confra");
+    const bloco = `<div class="w-sec ag-aviso ${confra ? "festa" : ""}"><div class="eyebrow">📅 Novo na sua agenda</div>${novos.map(e => `<div class="row"><span class="ev-ic ${e.tipo}">${TIPOS[e.tipo][1]}</span><div class="grow"><div class="t">${esc(e.titulo)}</div><div class="s">${e.d === HOJE ? "Hoje" : e.d === addDays(HOJE, 1) ? "Amanhã" : cap(DIA[D(e.d).getDay()]) + ", " + fd(e.d).slice(0, 5)} às ${e.h}${e.local ? " · " + esc(e.local) : ""}${e.obs ? " · " + esc(e.obs) : ""}</div></div></div>`).join("")}<button class="btn sm" id="avAg" style="justify-self:start">Ver na agenda</button></div>`;
+    const sheet = $("#modalRoot .sheet");
+    if (sheet) sheet.querySelector(".sheet-head").insertAdjacentHTML("afterend", bloco);
+    else modal(`<div class="sheet-head"><div><div class="eyebrow">${hojeLongo()}</div><h2>${confra ? "🎉 Tem festa chegando, " : "Novidade na agenda, "}${esc(firstName(me.name))}!</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>${bloco}<div style="display:flex;justify-content:flex-end"><button class="btn primary" data-close>Entendi</button></div>`);
+    $("#avAg").onclick = () => { closeModal(); agDia = novos[0].d; agMes = agDia.slice(0, 7); go("agd") };
+  }
+  const _welcome = welcome;
+  welcome = () => { _welcome(); avisoAgenda() };
+
+  /* =====================================================================
+     FERRAMENTAS SOB RESPONSABILIDADE DO FUNCIONÁRIO
+     ===================================================================== */
+  const ESTADOS = ["Nova", "Boa", "Precisa de reparo", "Devolvida"];
+  function seedFerramentas() {
+    const F = {
+      e1: [["Furadeira de impacto Bosch GSB 13 RE", "GA-014", -400, "Boa", 489], ["Termofusora 20 a 63 mm", "GA-022", -380, "Boa", 690], ["Prensa para PEX com 3 mordentes", "GA-031", -200, "Nova", 2150], ["Kit de chaves (grifo, inglesa, Allen)", "GA-040", -700, "Boa", 380]],
+      e3: [["Furadeira de impacto Makita", "GA-015", -900, "Precisa de reparo", 520], ["Detector de vazamento por ultrassom", "GA-051", -120, "Nova", 3890], ["Cortador de tubo PEX", "GA-033", -500, "Boa", 120]],
+      e7: [["Analisador de gás de combustão", "GA-060", -300, "Boa", 4200], ["Manômetro digital", "GA-061", -300, "Boa", 650], ["Kit de chaves para aquecedor", "GA-062", -300, "Boa", 290]],
+      e8: [["Martelete rompedor SDS", "GA-018", -600, "Boa", 1290], ["Termofusora 20 a 63 mm", "GA-023", -600, "Boa", 690], ["Escada de alumínio 7 degraus", "GA-070", -250, "Boa", 420]],
+      e2: [["Cortador de tubo PEX", "GA-034", -300, "Boa", 120], ["Arco de serra e lima", "GA-041", -300, "Boa", 85]],
+      e4: [["Kit de chaves básico", "GA-042", -500, "Boa", 160]]
+    };
+    Object.entries(F).forEach(([id, l]) => { const e = staff.find(x => x.id === id); if (e) e.ferramentas = l.map(f => ({ nome: f[0], cod: f[1], d: addDays(HOJE, f[2]), estado: f[3], valor: f[4] })) });
+  }
+  const _staffForm = staffForm;
+  staffForm = e => {
+    _staffForm(e);
+    let tl = (e && e.ferramentas || []).map(f => ({ ...f }));
+    $("#sfErr").insertAdjacentHTML("beforebegin", `<div class="card" style="background:var(--surface-2);display:grid;gap:10px" id="sfTools"></div>`);
+    const draw = () => {
+      const ativas = tl.filter(f => f.estado !== "Devolvida"), tot = ativas.reduce((s, f) => s + (+f.valor || 0), 0);
+      $("#sfTools").innerHTML = `<div class="card-head" style="margin:0"><div class="eyebrow">🧰 Ferramentas sob responsabilidade</div>${ativas.length ? `<span class="s">${ativas.length} · ${brl0(tot)}</span>` : ""}</div>
+  <p class="s" style="margin:0">O que a empresa entregou para essa pessoa cuidar. Na saída da empresa, confira a devolução.</p>
+  <div class="list">${tl.map((f, i) => `<div class="row tool ${f.estado === "Devolvida" ? "feito" : ""}"><div class="grow"><div class="t">${esc(f.nome)}</div><div class="s">${f.cod ? "Nº " + esc(f.cod) + " · " : ""}entregue em ${fd(f.d)}${f.valor ? " · " + brl0(f.valor) : ""}</div></div><select class="input tEst" data-i="${i}" style="width:auto">${ESTADOS.map(x => `<option ${x === f.estado ? "selected" : ""}>${x}</option>`).join("")}</select><button type="button" class="btn sm ghost tDel" data-i="${i}" aria-label="Tirar">×</button></div>`).join("") || '<p class="s" style="margin:0">Nenhuma ferramenta cadastrada.</p>'}</div>
+  <div class="tool-add"><input class="input" id="tN" placeholder="Ferramenta (ex.: Furadeira de impacto)"><input class="input" id="tC" placeholder="Nº / patrimônio"><input class="input num" id="tV" type="number" min="0" step="0.01" placeholder="Valor R$"><input class="input" id="tD" type="date" value="${HOJE}"><button type="button" class="btn sm" id="tAdd">+ Adicionar</button></div>
+  ${e && tl.length ? `<button type="button" class="btn sm" id="tTermo" style="justify-self:start">📄 Termo de responsabilidade (PDF)</button>` : ""}`;
+      $$("#sfTools .tEst").forEach(x => x.onchange = () => { tl[+x.dataset.i].estado = x.value; draw() });
+      $$("#sfTools .tDel").forEach(x => x.onclick = () => { tl.splice(+x.dataset.i, 1); draw() });
+      $("#tAdd").onclick = () => { const nome = $("#tN").value.trim(); if (!nome) { $("#tN").focus(); return } tl.push({ nome, cod: $("#tC").value.trim(), valor: +$("#tV").value || 0, d: $("#tD").value || HOJE, estado: "Nova" }); draw(); $("#tN").focus() };
+      const tt = $("#tTermo"); if (tt) tt.onclick = () => { const html = termoPaper(e, tl.filter(f => f.estado !== "Devolvida")); enviarPdfWhats(html, `Termo de ferramentas - ${e.name}`, e.phone, `Olá ${firstName(e.name)}, segue o termo de responsabilidade das ferramentas da empresa que estão com você. Confira e assine, por favor.`) };
+    };
+    draw();
+    // ao salvar, guarda as ferramentas junto do cadastro
+    $("#sfSave").addEventListener("click", () => {
+      if ($("#modalRoot #sfSave")) return; // não salvou (faltou algo no formulário)
+      const alvo = e || staff[staff.length - 1]; if (alvo) alvo.ferramentas = tl;
+    });
+  };
+  function termoPaper(e, tl) {
+    return `<div class="paper">${paperHead("TERMO DE RESPONSABILIDADE", ["Ferramentas e equipamentos", `Emitido em ${fd(HOJE)}`])}
+  <div class="pb">
+   <div class="cols"><div><div class="lbl">Funcionário</div><b>${esc(e.name)}</b><br>${esc(e.role)}${e.cpf ? "<br>CPF " + esc(e.cpf) : ""}</div><div><div class="lbl">Empresa</div><b>${esc(EMPRESA.nome)}</b>${EMPRESA.cnpj ? "<br>CNPJ " + esc(EMPRESA.cnpj) : ""}</div></div>
+   <div>Declaro que recebi da empresa as ferramentas e equipamentos abaixo, em condições de uso, e me comprometo a usá-los apenas no trabalho, cuidar deles e devolvê-los quando solicitado ou ao sair da empresa. Em caso de perda ou dano por mau uso, comunicarei imediatamente o escritório.</div>
+   <table><thead><tr><th>Ferramenta</th><th>Nº</th><th>Entregue em</th><th>Estado</th><th class="r">Valor</th></tr></thead><tbody>
+    ${tl.map(f => `<tr><td>${esc(f.nome)}</td><td>${esc(f.cod || "—")}</td><td>${fd(f.d)}</td><td>${esc(f.estado)}</td><td class="r num">${f.valor ? brl(f.valor) : "—"}</td></tr>`).join("")}
+   </tbody></table>
+   <div class="tot num"><div class="g"><span>Total</span><span>${brl(tl.reduce((s, f) => s + (+f.valor || 0), 0))}</span></div></div>
+   <div class="cols" style="margin-top:28px"><div class="sign">${esc(e.name)}</div><div class="sign">${esc(EMPRESA.nome)}</div></div>
+  </div>${paperFoot("Termo · " + e.name)}</div>`;
+  }
+
+  let semeado = false;
   const _loadDemo = loadDemo;
-  loadDemo = () => { _loadDemo(); seedEtapas(); estoque = []; movs = []; eventos = []; seedEstoque(); seedAgenda(); agMes = HOJE.slice(0, 7); agDia = HOJE };
+  loadDemo = () => {
+    _loadDemo(); seedEtapas(); seedFerramentas();
+    // estoque e agenda continuam entre um login e outro, para dar para testar dono → funcionário
+    if (!semeado) { semeado = true; seedEstoque(); seedAgenda() }
+    agMes = HOJE.slice(0, 7); agDia = HOJE;
+  };
 })();

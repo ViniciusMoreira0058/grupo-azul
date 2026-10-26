@@ -452,6 +452,12 @@ a.btn{text-decoration:none}
 .ev-ic{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft)}
 .ev-ic.orc{background:var(--warn-soft)} .ev-ic.manut,.ev-ic.entrega{background:var(--good-soft)} .ev-ic.reuniao,.ev-ic.obra{background:var(--surface-2)}
 .row.feito .t{text-decoration:line-through;color:var(--muted)}
+.dot.confra{background:#c084fc} .cal-evs i.confra{background:rgba(192,132,252,.18)} .ev-ic.confra{background:rgba(192,132,252,.18)}
+.ag-aviso{border:1px solid var(--accent-2);border-radius:12px;padding:12px;background:var(--accent-soft)}
+.ag-aviso.festa{border-color:#c084fc;background:rgba(192,132,252,.12)}
+.tool-add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto;gap:6px}
+@media (max-width:640px){.tool-add{grid-template-columns:1fr 1fr}.tool-add #tN{grid-column:1/-1}.row.tool{flex-wrap:wrap}.row.tool .grow{flex-basis:100%}.row.tool .t{white-space:normal}.row.tool select{flex:1}}
+.row.tool .input{padding-top:6px;padding-bottom:6px;font-size:13px}
 .pdf-render{position:fixed;left:-10000px;top:0;width:794px}
 .pdf-render .paper{min-width:0;box-shadow:none;border-radius:0}
 .pdf-render .paper .ph .lines{display:none}
