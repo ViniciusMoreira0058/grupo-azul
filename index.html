@@ -461,6 +461,7 @@ a.btn{text-decoration:none}
 .os-tot{display:flex;gap:6px 16px;flex-wrap:wrap;justify-content:flex-end;align-items:baseline;font-size:13px;color:var(--muted)}.os-tot b{color:var(--fg);font-size:16px}
 .tool-add.os-add{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto}.os-add #ffN{grid-column:1/-1}
 @media (max-width:640px){.tool-add.os-add{grid-template-columns:1fr 1fr}.os-add #ffI{grid-column:1/-1}}
+.nova-versao{position:fixed;left:16px;right:16px;margin:0 auto;width:fit-content;bottom:16px;z-index:200;display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--accent-2);border-radius:12px;padding:10px 12px 10px 16px;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:calc(100vw - 32px);font-size:14px}
 .ag-aviso{border:1px solid var(--accent-2);border-radius:12px;padding:12px;background:var(--accent-soft)}
 .ag-aviso.festa{border-color:#c084fc;background:rgba(192,132,252,.12)}
 .tool-add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto;gap:6px}
@@ -542,6 +543,7 @@ a.btn{text-decoration:none}
 </div>
 <div id="modalRoot"></div>
 <div id="printRoot" aria-hidden="true"></div>
+<script src="atualizar.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
