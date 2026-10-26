@@ -129,6 +129,7 @@
  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap">${!tec && aberta ? `<button class="btn ghost" id="odCanc">Cancelar OS</button><button class="btn" id="odEdit">Editar</button>` : ""}${zap && aberta && !tec ? `<a class="btn" href="${zap}" target="_blank" rel="noopener">Confirmar com o cliente</a>` : ""}</span>
   <span style="display:flex;gap:8px;flex-wrap:wrap">${o.status === "Aberta" ? `<button class="btn" id="odIni">Iniciar atendimento</button>` : ""}${aberta ? `<button class="btn primary" id="odFech">Fechar OS</button>` : ""}${fechada ? `${!tec && !o.pago ? `<button class="btn" id="odPago">Marcar como recebido</button>` : ""}<button class="btn" id="odPrint">Imprimir</button><button class="btn primary" id="odZap">📲 Enviar PDF no WhatsApp</button>` : ""}</span></div>`, true);
     const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn };
+    if (window.gaBotaoExcluir) gaBotaoExcluir("os", o);
     on("#odEdit", () => osForm(o));
     const cb = $("#odCanc"); if (cb) twoStep(cb, "Confirmar: cancelar", () => { closeModal(); act(async () => { if (DEMO) o.status = "Cancelada"; else await live(sb.from("ga_os").update({ status: "Cancelada" }).eq("id", o.id)) }, `${o.n} cancelada`) });
     on("#odIni", () => { closeModal(); act(async () => { if (DEMO) o.status = "Em andamento"; else await live(sb.rpc("ga_os_iniciar", { p_id: o.id })) }, "Atendimento iniciado") });
@@ -235,6 +236,9 @@
     const b = $("#nav button[data-p=os]"), base = me.role === "tec" ? minhas() : ordens, n = base.filter(o => ["Aberta", "Em andamento"].includes(o.status) && o.d <= HOJE).length;
     if (b && n) b.insertAdjacentHTML("beforeend", `<span class="nbadge info">${n}</span>`);
   };
+  // usado pelo botão Excluir (apagar.js)
+  window.gaOS = { doCliente: id => ordens.filter(o => o.cli === id).length, apagar: id => { ordens = ordens.filter(o => o.id !== id) }, tirarCliente: id => { ordens = ordens.filter(o => o.cli !== id) }, doTecnico: id => ordens.filter(o => o.tec === id && ["Aberta", "Em andamento"].includes(o.status)).length };
+
   // app real: carrega as OS depois do resto
   const _reload = reload;
   reload = async () => {
