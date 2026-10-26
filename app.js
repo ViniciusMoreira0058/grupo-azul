@@ -304,7 +304,7 @@ function renderNav() {
   const pages = PAGES.filter(p => can(p[0]));
   const nLem = lemPend().filter(l => l.urg === "urgente" || (l.due && l.due <= HOJE)).length;
   $("#nav").innerHTML = pages.map(([k, l]) => `<button data-p="${k}" class="${k === current ? "active" : ""}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}${k === "lem" && nLem ? `<span class="nbadge">${nLem}</span>` : ""}</button>${k === "rel" && REL_V2 && current === "rel" ? `<div class="nav-sub">${REL_TABS.map(([sk, sl]) => `<button data-sub="${sk}" class="${relTab === sk ? "on" : ""}">${sl}</button>`).join("")}</div>` : ""}`).join("")
-    + (me.role === "tec" ? "" : `<div class="nav-label eyebrow">Fase 2</div>` + SOON.map(([k, l]) => `<button disabled><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}<span class="soon">Em breve</span></button>`).join(""));
+    + (me.role === "tec" || !SOON.length ? "" : `<div class="nav-label eyebrow">Fase 2</div>` + SOON.map(([k, l]) => `<button disabled><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}<span class="soon">Em breve</span></button>`).join(""));
   $$("#nav button[data-p]").forEach(b => b.onclick = () => go(b.dataset.p));
   $$("#nav button[data-sub]").forEach(b => b.onclick = () => { relTab = b.dataset.sub; go("rel") });
 }

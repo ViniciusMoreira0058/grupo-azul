@@ -299,9 +299,11 @@
     const va = $("#esVerAc"); if (va) va.onclick = () => { estCat = "acabando"; VIEWS.est(); $("#esCats").scrollIntoView({ block: "start" }) };
     const wl = $("#esLista"); if (wl) wl.onclick = () => window.open(waLink("", "*Lista de compras · Grupo Azul*\n" + acabando().map(i => `• ${i.nome}: ${qtdTxt(Math.max(i.min * 2 - i.qtd, 1), i.un)}`).join("\n")), "_blank");
   };
+  // a Ordem de serviço (os.js, demonstração) usa o estoque
+  window.gaEstoque = { itens: () => estoque, baixa: (id, q, obs) => { const i = estoque.find(x => x.id === id); if (!i) return; i.qtd = Math.max(0, i.qtd - q); movs.unshift({ id: nextId(movs), item: id, tipo: "saida", qtd: q, obra: null, d: HOJE, quem: me.id, obs }) } };
   function movRow(m) {
     const it = estoque.find(i => i.id === m.item) || { nome: "—", un: "" }, o = obras.find(x => x.id === m.obra);
-    return `<div class="row"><span class="mov ${m.tipo}">${m.tipo === "entrada" ? "↓" : "↑"}</span><div class="grow"><div class="t">${esc(it.nome)}</div><div class="s">${fd(m.d)} · ${m.tipo === "entrada" ? esc(m.obs || "Entrada") : `para ${esc(o ? clientById(o.client).name : "obra")}`} · ${esc(emp(m.quem).name)}</div></div><b class="num ${m.tipo === "entrada" ? "up" : ""}">${m.tipo === "entrada" ? "+" : "−"}${qtdTxt(m.qtd, it.un)}</b></div>`;
+    return `<div class="row"><span class="mov ${m.tipo}">${m.tipo === "entrada" ? "↓" : "↑"}</span><div class="grow"><div class="t">${esc(it.nome)}</div><div class="s">${fd(m.d)} · ${m.tipo === "entrada" ? esc(m.obs || "Entrada") : (o ? `para ${esc(clientById(o.client).name)}` : esc(m.obs || "Saída"))} · ${esc(emp(m.quem).name)}</div></div><b class="num ${m.tipo === "entrada" ? "up" : ""}">${m.tipo === "entrada" ? "+" : "−"}${qtdTxt(m.qtd, it.un)}</b></div>`;
   }
   function itemDetail(i) {
     const ms = movs.filter(m => m.item === i.id), porObra = {};
