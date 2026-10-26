@@ -335,14 +335,14 @@ if (DEMO) (() => {
   let eventos = [], agMes = HOJE.slice(0, 7), agDia = HOJE, agQuem = "";
   const TIPOS = { visita: ["Visita técnica", "🔎", "c-info"], orc: ["Medição / orçamento", "📐", "c-warn"], manut: ["Manutenção", "🔧", "c-good"], entrega: ["Entrega da obra", "🔑", "c-good"], reuniao: ["Reunião", "👥", "c-mute"], obra: ["Dia de obra", "🏗️", "c-mute"] };
   function seedAgenda() {
-    const ev = (d, h, tipo, titulo, cli, quem, extra = {}) => eventos.push({ id: eventos.length + 1, d: proxUtil(addDays(HOJE, d)), h, tipo, titulo, cli, quem, local: cli ? (obras.find(o => o.client === cli) || {}).addr || clientById(cli).city : "", obs: "", feito: d < 0, ...extra });
+    const ev = (d, h, tipo, titulo, cli, quem, extra = {}) => eventos.push({ id: eventos.length + 1, d: proxUtil(addDays(HOJE, d)), h, tipo, titulo, cli, quem, local: cli ? (obras.find(o => o.client === cli) || {}).addr || clientById(cli).city : "", obs: "", feito: d < 0, equipeVe: ["visita", "manut", "entrega"].includes(tipo) && quem.some(id => emp(id).access === "tec"), ...extra });
     ev(0, "08:00", "manut", "Troca do reparo da válvula de descarga", 6, ["e7"]);
     ev(0, "14:30", "orc", "Medição para pressurização do apartamento", 20, ["e0"]);
     ev(0, "17:00", "reuniao", "Alinhamento semanal das obras", null, ["e0", "e11", "e1", "e3"], { local: "Escritório" });
     ev(1, "09:00", "visita", "Vazamento no teto do banheiro social", 9, ["e8"]);
     ev(1, "15:00", "orc", "Orçamento de aquecimento solar", 7, ["e0"]);
     ev(2, "10:00", "manut", "Limpeza dos reservatórios", 17, ["e3", "e4"]);
-    ev(3, "08:30", "visita", "Pressão fraca nos chuveiros", 11, ["e7"]);
+    ev(3, "08:30", "visita", "Pressão fraca nos chuveiros", 11, ["e7", "e1"]);
     ev(4, "11:00", "entrega", "Vistoria final com a síndica", 2, ["e3", "e0"]);
     ev(6, "09:00", "orc", "Medição para reúso de água", 3, ["e0", "e1"]);
     ev(8, "14:00", "manut", "Revisão anual dos aquecedores", 8, ["e7"]);
@@ -360,8 +360,10 @@ if (DEMO) (() => {
   const obrasNoDia = d => isDom(d) ? [] : obras.filter(o => d >= o.start && d <= (o.pct >= 100 ? entregaObra(o) : o.end) && (o.pct < 100 || d <= entregaObra(o)));
   function itensDoDia(d) {
     const qf = e => !agQuem || e.quem.includes(agQuem);
-    const evs = eventos.filter(e => e.d === d && qf(e) && (me.role !== "tec" || e.quem.includes(me.id))).sort((a, b) => a.h.localeCompare(b.h));
-    const obs = obrasNoDia(d).filter(o => (me.role !== "tec" || o.resp === me.id || o.team.includes(me.id)) && (!agQuem || o.resp === agQuem || o.team.includes(agQuem)));
+    const tec = me.role === "tec";
+    const evs = eventos.filter(e => e.d === d && qf(e) && (!tec || (e.equipeVe && e.quem.includes(me.id)))).sort((a, b) => a.h.localeCompare(b.h));
+    // funcionário: só o dia de início e o de entrega das obras dele
+    const obs = tec ? obras.filter(o => (o.resp === me.id || o.team.includes(me.id)) && (d === o.start || (d === o.end && o.pct < 100))) : obrasNoDia(d).filter(o => !agQuem || o.resp === agQuem || o.team.includes(agQuem));
     return { evs, obs };
   }
   VIEWS.agd = () => {
@@ -371,14 +373,14 @@ if (DEMO) (() => {
     const cel = d => {
       const { evs, obs } = itensDoDia(d), fora = d.slice(0, 7) !== agMes;
       return `<button class="cal-d ${fora ? "fora" : ""} ${d === HOJE ? "hoje" : ""} ${d === agDia ? "sel" : ""} ${isDom(d) ? "dom" : ""}" data-d="${d}"><span class="n">${+d.slice(8)}</span>
-   <span class="cal-evs">${evs.slice(0, 3).map(e => `<i class="ev ${e.tipo}">${TIPOS[e.tipo][1]} <b>${e.h}</b> ${esc(e.titulo)}</i>`).join("")}${evs.length > 3 ? `<i class="mais">+${evs.length - 3}</i>` : ""}</span>
-   <span class="cal-dots">${evs.map(e => `<i class="dot ${e.tipo}"></i>`).join("")}${obs.length ? `<i class="dot obra"></i>` : ""}</span>${obs.length ? `<span class="cal-ob">🏗️ ${obs.length}</span>` : ""}</button>`;
+   <span class="cal-evs">${evs.slice(0, 3).map(e => `<i class="ev ${e.tipo}">${TIPOS[e.tipo][1]} <b>${e.h}</b> ${esc(e.titulo)}</i>`).join("")}${evs.length > 3 ? `<i class="mais">+${evs.length - 3}</i>` : ""}${me.role === "tec" ? obs.map(o => `<i class="ev ${d === o.start ? "orc" : "entrega"}">${d === o.start ? "🏁 Início" : "🔑 Entrega"} ${esc(clientById(o.client).name)}</i>`).join("") : ""}</span>
+   <span class="cal-dots">${evs.map(e => `<i class="dot ${e.tipo}"></i>`).join("")}${me.role === "tec" ? obs.map(o => `<i class="dot ${d === o.start ? "orc" : "entrega"}"></i>`).join("") : obs.length ? `<i class="dot obra"></i>` : ""}</span>${obs.length && me.role !== "tec" ? `<span class="cal-ob">🏗️ ${obs.length}</span>` : ""}</button>`;
     };
-    const prox = eventos.filter(e => e.d >= HOJE && e.d <= addDays(HOJE, 7) && (!agQuem || e.quem.includes(agQuem)) && (me.role !== "tec" || e.quem.includes(me.id))).sort((a, b) => (a.d + a.h).localeCompare(b.d + b.h));
-    $("#main").innerHTML = head("Agenda", me.role === "tec" ? "Suas visitas e os dias de obra" : "Visitas, medições, manutenções e onde cada um está trabalhando", me.role === "tec" ? "" : `<button class="btn primary" id="agNew">+ Agendar</button>`) + `
+    const prox = eventos.filter(e => e.d >= HOJE && e.d <= addDays(HOJE, 7) && (!agQuem || e.quem.includes(agQuem)) && (me.role !== "tec" || (e.equipeVe && e.quem.includes(me.id)))).sort((a, b) => (a.d + a.h).localeCompare(b.d + b.h));
+    $("#main").innerHTML = head("Agenda", me.role === "tec" ? "Início e entrega das suas obras e os compromissos que o escritório marcou para você" : "Visitas, medições, manutenções e onde cada um está trabalhando", me.role === "tec" ? "" : `<button class="btn primary" id="agNew">+ Agendar</button>`) + `
  <div class="ag-top"><div class="month-nav"><button class="btn sm" id="agPrev" aria-label="Mês anterior">‹</button><b>${mesNome(agMes + "-01")}</b><button class="btn sm" id="agNext" aria-label="Próximo mês">›</button></div><button class="btn sm" id="agHoje">Hoje</button><span style="flex:1"></span>${me.role === "tec" ? "" : `<select class="input" id="agQuem" style="width:auto"><option value="">Toda a equipe</option>${pessoas.map(e => `<option value="${e.id}" ${agQuem === e.id ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select>`}</div>
  <div class="ag-grid"><div class="card cal-card"><div class="cal">${["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(d => `<span class="cal-h">${d}</span>`).join("")}${dias.slice(0, semanas * 7).map(cel).join("")}</div>
-  <div class="cal-leg">${Object.entries(TIPOS).filter(([k]) => k !== "obra").map(([k, t]) => `<span><i class="dot ${k}"></i>${t[0]}</span>`).join("")}<span><i class="dot obra"></i>Equipe em obra</span></div></div>
+  <div class="cal-leg">${me.role === "tec" ? `<span><i class="dot orc"></i>Início de obra</span><span><i class="dot entrega"></i>Entrega da obra</span><span><i class="dot"></i>Compromisso marcado pelo escritório</span>` : ""}${me.role === "tec" ? "" : Object.entries(TIPOS).filter(([k]) => k !== "obra").map(([k, t]) => `<span><i class="dot ${k}"></i>${t[0]}</span>`).join("") + `<span><i class="dot obra"></i>Equipe em obra</span>`}</div></div>
   <div class="card" id="agDiaBox"></div></div>
  <div class="card" style="margin-top:14px"><div class="card-head"><h2>Próximos 7 dias</h2></div><div class="list">${prox.map(e => evRow(e, true)).join("") || '<p class="s" style="margin:0">Nada agendado.</p>'}</div></div>`;
     const mv = n => { agMes = addMonths(agMes + "-01", n).slice(0, 7); VIEWS.agd() };
@@ -391,13 +393,13 @@ if (DEMO) (() => {
   };
   function evRow(e, comData) {
     const t = TIPOS[e.tipo], c = e.cli ? clientById(e.cli) : null;
-    return `<div class="row click ${e.feito ? "feito" : ""}" data-ev="${e.id}"><span class="ev-ic ${e.tipo}">${t[1]}</span><div class="grow"><div class="t">${esc(e.titulo)}</div><div class="s">${comData ? `${cap(DIA[D(e.d).getDay()]).slice(0, 3)} ${fd(e.d).slice(0, 5)} · ` : ""}<b>${e.h}</b> · ${t[0]}${c ? " · " + esc(c.name) : ""} · ${e.quem.map(id => esc(firstName(emp(id).name))).join(", ")}</div></div>${e.feito ? '<span class="chip c-good">Feito</span>' : ""}</div>`;
+    return `<div class="row click ${e.feito ? "feito" : ""}" data-ev="${e.id}"><span class="ev-ic ${e.tipo}">${t[1]}</span><div class="grow"><div class="t">${esc(e.titulo)}</div><div class="s">${comData ? `${cap(DIA[D(e.d).getDay()]).slice(0, 3)} ${fd(e.d).slice(0, 5)} · ` : ""}<b>${e.h}</b> · ${t[0]}${c ? " · " + esc(c.name) : ""} · ${e.quem.map(id => esc(firstName(emp(id).name))).join(", ")}</div></div>${e.feito ? '<span class="chip c-good">Feito</span>' : me.role !== "tec" && e.equipeVe ? '<span class="chip c-info" title="Aparece na agenda do funcionário">👁 Equipe vê</span>' : ""}</div>`;
   }
   function diaBox() {
     const { evs, obs } = itensDoDia(agDia), box = $("#agDiaBox");
     box.innerHTML = `<div class="card-head"><h2>${agDia === HOJE ? "Hoje" : cap(DIA[D(agDia).getDay()])}, ${fd(agDia).slice(0, 5)}</h2>${me.role === "tec" ? "" : `<button class="btn sm" id="agNewD">+ Agendar neste dia</button>`}</div>
    <div class="list">${evs.map(e => evRow(e)).join("") || '<p class="s" style="margin:0 0 6px">Nenhuma visita ou compromisso.</p>'}</div>
-   ${obs.length ? `<div class="eyebrow" style="margin:14px 0 6px">Equipe em obra</div><div class="list">${obs.map(o => `<div class="row click" data-ob="${o.id}"><span class="ev-ic obra">🏗️</span><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${[o.resp, ...o.team].map(id => esc(firstName(emp(id).name))).join(", ")} · ${esc(o.title)}</div></div></div>`).join("")}</div>` : ""}`;
+   ${obs.length ? `<div class="eyebrow" style="margin:14px 0 6px">${me.role === "tec" ? "Suas obras" : "Equipe em obra"}</div><div class="list">${obs.map(o => `<div class="row click" data-ob="${o.id}"><span class="ev-ic ${me.role === "tec" ? (agDia === o.start ? "orc" : "entrega") : "obra"}">${me.role === "tec" ? (agDia === o.start ? "🏁" : "🔑") : "🏗️"}</span><div class="grow"><div class="t">${me.role === "tec" ? (agDia === o.start ? "Início da obra · " : "Entrega da obra · ") : ""}${esc(clientById(o.client).name)}</div><div class="s">${[o.resp, ...o.team].map(id => esc(firstName(emp(id).name))).join(", ")} · ${esc(o.title)}</div></div></div>`).join("")}</div>` : ""}`;
     $$("#agDiaBox [data-ev]").forEach(r => r.onclick = () => evDetail(eventos.find(e => e.id === +r.dataset.ev)));
     $$("#agDiaBox [data-ob]").forEach(r => r.onclick = () => { const o = obras.find(x => x.id === +r.dataset.ob); me.role === "tec" ? go("obr") : obraDetail(o) });
     const nd = $("#agNewD"); if (nd) nd.onclick = () => evForm(null, agDia);
@@ -406,7 +408,7 @@ if (DEMO) (() => {
     const t = TIPOS[e.tipo], c = e.cli ? clientById(e.cli) : null;
     const msg = c && c.phone ? waLink(c.phone, `Olá ${firstName(c.contact || c.name)}, tudo bem? Aqui é do Grupo Azul. Confirmando nossa ${t[0].toLowerCase()} ${e.d === HOJE ? "hoje" : "no dia " + fd(e.d)} às ${e.h}. Até lá!`) : "";
     modal(`<div class="sheet-head"><div><div class="eyebrow">${t[1]} ${t[0]}</div><h2>${esc(e.titulo)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
- <div class="et-resumo"><span>📅 <b>${cap(DIA[D(e.d).getDay()])}, ${fd(e.d)}</b> às <b>${e.h}</b></span>${c ? `<span>👤 ${esc(c.name)}${c.contact ? " · " + esc(c.contact) : ""}</span>` : ""}<span>👷 ${e.quem.map(id => esc(emp(id).name)).join(", ")}</span></div>
+ <div class="et-resumo"><span>📅 <b>${cap(DIA[D(e.d).getDay()])}, ${fd(e.d)}</b> às <b>${e.h}</b></span>${c ? `<span>👤 ${esc(c.name)}${c.contact ? " · " + esc(c.contact) : ""}</span>` : ""}<span>👷 ${e.quem.map(id => esc(emp(id).name)).join(", ")}</span>${me.role !== "tec" ? `<span>${e.equipeVe ? "👁 Aparece na agenda do funcionário" : "🔒 Só o escritório vê"}</span>` : ""}</div>
  ${e.obs ? `<div class="note" style="margin:0">${esc(e.obs)}</div>` : ""}
  ${e.local && e.local !== "Escritório" ? mapaObra({ addr: e.local }) : e.local ? `<div class="s">📍 ${esc(e.local)}</div>` : ""}
  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">${me.role === "tec" ? "<span></span>" : `<button class="btn ghost" id="evDel">Excluir</button>`}<span style="display:flex;gap:8px;flex-wrap:wrap">${msg && me.role !== "tec" ? `<a class="btn" href="${msg}" target="_blank" rel="noopener">Confirmar com o cliente</a>` : ""}${me.role === "tec" ? "" : `<button class="btn" id="evEdit">Editar</button>`}<button class="btn primary" id="evFeito">${e.feito ? "Marcar como não feito" : "Marcar como feito"}</button></span></div>`, true);
@@ -415,7 +417,7 @@ if (DEMO) (() => {
     const dl = $("#evDel"); if (dl) twoStep(dl, "Confirmar: excluir", () => { closeModal(); act(async () => { eventos = eventos.filter(x => x !== e) }, "Compromisso excluído") });
   }
   function evForm(e, dia) {
-    const v = e || { tipo: "visita", titulo: "", d: dia || HOJE, h: "09:00", cli: null, quem: [], local: "", obs: "" };
+    const v = e || { tipo: "visita", titulo: "", d: dia || HOJE, h: "09:00", cli: null, quem: [], local: "", obs: "", equipeVe: false };
     const pessoas = staff.filter(x => x.active && x.id !== "e5");
     modal(`<div class="sheet-head"><h2>${e ? "Editar compromisso" : "Agendar"}</h2><button class="x" data-close aria-label="Fechar">×</button></div>
  <div class="field"><label>Tipo</label><div class="tabs" id="efT" style="flex-wrap:wrap">${Object.entries(TIPOS).filter(([k]) => k !== "obra").map(([k, t]) => `<button type="button" data-t="${k}" class="${v.tipo === k ? "active" : ""}">${t[1]} ${t[0]}</button>`).join("")}</div></div>
@@ -424,6 +426,7 @@ if (DEMO) (() => {
  <div class="field"><label for="efC">Cliente (opcional)</label><select class="input" id="efC"><option value="">—</option>${clients.map(c => `<option value="${c.id}" ${c.id === v.cli ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div><div class="field"><label for="efL">Endereço</label><input class="input" id="efL" value="${esc(v.local)}" placeholder="Rua, número · bairro"></div></div>
  <div class="field"><label>Quem vai</label><div style="display:flex;flex-wrap:wrap;gap:4px 16px">${pessoas.map(x => `<label class="task"><input type="checkbox" id="efQ_${x.id}" ${v.quem.includes(x.id) ? "checked" : ""}><span>${esc(x.name)}</span></label>`).join("")}</div></div>
  <div class="field"><label for="efO">Observação (opcional)</label><textarea class="input" id="efO" placeholder="Ex.: levar escada e detector de vazamento">${esc(v.obs)}</textarea></div>
+ <label class="task et-fim"><input type="checkbox" id="efVe" ${v.equipeVe ? "checked" : ""}><span><b>Mostrar na agenda do funcionário</b><br><span class="s">Quem vai recebe esse compromisso na agenda dele. Se não marcar, só o escritório vê.</span></span></label>
  <p class="s" id="efConf" style="margin:0"></p><p class="s form-err" id="efErr" hidden></p>
  <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="efSave">Salvar</button></div>`, true);
     let tipo = v.tipo;
@@ -438,7 +441,7 @@ if (DEMO) (() => {
       const titulo = $("#efTi").value.trim(), quem = pessoas.filter(x => $("#efQ_" + x.id).checked).map(x => x.id);
       const err = m => { $("#efErr").textContent = m; $("#efErr").hidden = false };
       if (!titulo) return err("Escreva o que é o compromisso."); if (!quem.length) return err("Escolha quem vai.");
-      const d = { tipo, titulo, d: $("#efD").value || HOJE, h: $("#efH").value || "09:00", cli: +$("#efC").value || null, quem, local: $("#efL").value.trim(), obs: $("#efO").value.trim() };
+      const d = { tipo, titulo, d: $("#efD").value || HOJE, h: $("#efH").value || "09:00", cli: +$("#efC").value || null, quem, local: $("#efL").value.trim(), obs: $("#efO").value.trim(), equipeVe: $("#efVe").checked };
       closeModal(); agDia = d.d; agMes = d.d.slice(0, 7);
       act(async () => { if (e) Object.assign(e, d); else eventos.push({ id: nextId(eventos), ...d, feito: false }) }, e ? "Compromisso atualizado" : `Agendado para ${fd(d.d)} às ${d.h}`);
     };
@@ -531,7 +534,7 @@ if (DEMO) (() => {
     _renderNav();
     const badge = (p, n, cls = "") => { const b = $(`#nav button[data-p=${p}]`); if (b && n) b.insertAdjacentHTML("beforeend", `<span class="nbadge ${cls}">${n}</span>`) };
     badge("est", acabando().length);
-    badge("agd", eventos.filter(e => e.d === HOJE && !e.feito && (me.role !== "tec" || e.quem.includes(me.id))).length, "info");
+    badge("agd", eventos.filter(e => e.d === HOJE && !e.feito && (me.role !== "tec" || (e.equipeVe && e.quem.includes(me.id)))).length, "info");
   };
 
   const _loadDemo = loadDemo;
