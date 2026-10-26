@@ -1,9 +1,11 @@
 /* Botão "Excluir" nos cadastros: cliente, orçamento, funcionário, material do estoque e ordem de serviço.
    Sempre com uma tela explicando o que sai junto e confirmação em dois toques.
    Obras, lançamentos, compromissos e lembretes já tinham o próprio botão.
-   Por enquanto só na demonstração (?demo=1). */
+   O banco já deixa só quem pode apagar (RLS). */
 (() => {
-  const ATIVO = DEMO;
+  const ATIVO = true;
+  // apaga do armazenamento as fotos que ficariam sem dono
+  const tirarFotos = async paths => { paths = paths.filter(p => p && !/^(blob:|data:|https?:)/.test(p)); for (let i = 0; i < paths.length; i += 100) await sb.storage.from(BUCKET).remove(paths.slice(i, i + 100)) };
   const pl = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   const escritorio = () => me.role === "admin" || me.role === "fin";
   const PODE = {
@@ -25,7 +27,7 @@
         fica: nl ? `${pl(nl, "lançamento", "lançamentos")} do Financeiro continuam (a lei manda guardar), só sem a ligação com a obra.` : "",
         aviso: obs.some(o => o.pct < 100 && TODAY >= D(o.start)) ? "Esse cliente tem obra em andamento." : "",
         demo: () => { clients = clients.filter(c => c.id !== x.id); quotes = quotes.filter(q => q.client !== x.id); const ids = obs.map(o => o.id); obras = obras.filter(o => o.client !== x.id); lanc.forEach(l => { if (ids.includes(l.obra)) l.obra = null }); if (window.gaOS) gaOS.tirarCliente(x.id); if (window.gaAgenda) gaAgenda.tirarCliente(x.id) },
-        real: () => live(sb.from("ga_clientes").delete().eq("id", x.id)),
+        real: async () => { const fotos = obs.flatMap(o => o.log.flatMap(l => l.fotos || [])); await live(sb.from("ga_clientes").delete().eq("id", x.id)); await tirarFotos(fotos).catch(() => { }) },
         ok: `Cliente ${x.name} excluído`
       };
     }
@@ -48,7 +50,12 @@
         fica: "Os feedbacks e registros que a pessoa já enviou continuam nas obras.",
         aviso: [ativas.length && `Está em ${pl(ativas.length, "obra em andamento", "obras em andamento")}: troque o responsável ou a equipe depois.`, nos && `Tem ${pl(nos, "OS aberta", "OS abertas")}.`, "Se a pessoa só saiu da empresa, prefira desmarcar \"Acesso ativo\" no cadastro: o histórico fica com o nome dela."].filter(Boolean).join(" "),
         demo: () => { staff = staff.filter(e => e !== x); obras.forEach(o => { o.team = o.team.filter(id => id !== x.id) }); if (window.gaAgenda) gaAgenda.tirarPessoa(x.id) },
-        real: () => live(sb.from("ga_equipe").delete().eq("id", x.id)),
+        real: async () => {
+          // tira a pessoa das equipes das obras e dos compromissos antes de apagar
+          for (const o of obras.filter(o => o.team.includes(x.id))) await live(sb.from("ga_obras").update({ equipe: o.team.filter(id => id !== x.id) }).eq("id", o.id));
+          for (const e of (window.gaAgenda ? gaAgenda.comPessoa(x.id) : [])) await live(sb.from("ga_agenda").update({ quem: e.quem.filter(id => id !== x.id) }).eq("id", e.id));
+          await live(sb.from("ga_equipe").delete().eq("id", x.id));
+        },
         ok: `Cadastro de ${firstName(x.name)} excluído`
       };
     }
@@ -71,7 +78,7 @@
         fica: x.status === "Concluída" ? "O lançamento dela no Financeiro continua. Se quiser, apague lá também." : "",
         aviso: x.status === "Concluída" ? "Essa OS já foi feita e assinada. Para uma OS que não vai acontecer, prefira \"Cancelar OS\"." : "",
         demo: () => gaOS.apagar(x.id),
-        real: () => live(sb.from("ga_os").delete().eq("id", x.id)),
+        real: async () => { await live(sb.from("ga_os").delete().eq("id", x.id)); await tirarFotos([...x.fotosAntes, ...x.fotosDepois]).catch(() => { }) },
         ok: `${x.n} excluída`
       };
     }
