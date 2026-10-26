@@ -27,7 +27,8 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 6. **Lembretes**: rode também `supabase/002_lembretes.sql` no SQL Editor (cria a aba Lembretes).
 7. **Pedidos de material**: rode também `supabase/003_faltas_resposta.sql` (resposta do escritório e "Resolvido").
 8. **Orçamentos**: rode também `supabase/004_orcamento_empresa.sql` (dados da empresa no PDF e observações em cada orçamento).
-9. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
+9. **Conta de suporte oculta**: rode `supabase/005_conta_oculta.sql`. A conta `barbeariavm0058@gmail.com` continua administradora, mas some de Funcionários e das listas para os outros usuários.
+10. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
 
 ## Segurança
 

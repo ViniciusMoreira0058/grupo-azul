@@ -92,7 +92,7 @@ function mapClient(c) { return { id: c.id, name: c.nome, contact: c.contato || "
 function mapQuote(q) { return { id: q.id, n: q.numero, client: q.cliente_id, date: q.data, status: q.status, title: q.titulo, items: q.itens || [], note: q.nota || "" } }
 function mapLanc(l) { return { id: l.id, type: l.tipo, d: l.data, desc: l.descricao, cat: l.categoria || "", who: l.quem || "", obra: l.obra_id, pay: l.forma || "", v: +l.valor, paid: l.pago, file: l.comprovante || null } }
 function mapLem(l) { return { id: l.id, title: l.titulo, obs: l.obs || "", urg: l.urgencia, due: l.data, done: l.feito, at: l.criado_em } }
-function mapStaff(e) { return { id: e.id, name: e.nome, role: e.funcao, phone: e.telefone || "", email: e.email || "", cpf: e.cpf || "", since: e.admissao || "", daily: +e.diaria || 0, access: e.acesso, active: e.ativo, dono: e.dono, linked: !!e.user_id } }
+function mapStaff(e) { return { id: e.id, name: e.nome, role: e.funcao, phone: e.telefone || "", email: e.email || "", cpf: e.cpf || "", since: e.admissao || "", daily: +e.diaria || 0, access: e.acesso, active: e.ativo, dono: e.dono, oculto: !!e.oculto, linked: !!e.user_id } }
 function mapObra(o, fb, fa) {
   return {
     id: o.id, client: o.cliente_id, title: o.titulo, addr: o.endereco || "", start: o.inicio, end: o.fim, resp: o.responsavel, team: o.equipe || [], pct: o.pct, notes: o.recado || "",
@@ -119,7 +119,7 @@ async function reload() {
     r === "tec" ? [] : sel("ga_lancamentos"),
     r === "admin" ? sel("ga_equipe") : []
   ]);
-  staff = r === "admin" ? eq.map(mapStaff) : (nomes.equipe || []).map(e => ({ id: e.id, name: e.nome, role: e.funcao, active: e.ativo, access: "tec" }));
+  staff = r === "admin" ? eq.map(mapStaff) : (nomes.equipe || []).map(e => ({ id: e.id, name: e.nome, role: e.funcao, active: e.ativo, access: e.acesso || "tec" }));
   clients = r === "tec" ? (nomes.clientes || []).map(c => ({ ...clientById(), id: c.id, name: c.nome, city: c.cidade || "" })) : cl.map(mapClient);
   quotes = qu.map(mapQuote);
   lanc = la.map(mapLanc);
@@ -1335,7 +1335,7 @@ VIEWS.func = () => {
     const list = staff.filter(e => (e.name + e.role).toLowerCase().includes(q)).sort((a, b) => (b.active - a.active) || (b.dono ? 1 : 0) - (a.dono ? 1 : 0) || a.name.localeCompare(b.name));
     $("#fList").innerHTML = list.map(e => {
       const ob = obras.filter(o => (o.resp === e.id || o.team.includes(e.id)) && o.pct < 100), rate = e.access === "tec" ? fbRate(e) : null; return `<button class="card client" data-e="${e.id}" style="${e.active ? "" : "opacity:.6"}">
-   <div class="top"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="avatar" style="width:44px;height:44px;font-size:15px">${esc(e.ini)}</span><div style="min-width:0"><h3 style="font-size:16px">${esc(e.name)}</h3><div class="who">${esc(e.role)}${e.dono ? " · Dono" : ""}</div></div></div>${e.active ? `<span class="chip ${e.access === "tec" ? "c-info" : "c-good"}">${ACCESS[e.access][0]}</span>` : '<span class="chip c-mute">Desativado</span>'}</div>
+   <div class="top"><div style="display:flex;gap:12px;align-items:center;min-width:0"><span class="avatar" style="width:44px;height:44px;font-size:15px">${esc(e.ini)}</span><div style="min-width:0"><h3 style="font-size:16px">${esc(e.name)}</h3><div class="who">${esc(e.role)}${e.dono ? " · Dono" : ""}${e.oculto ? " · oculto para os outros" : ""}</div></div></div>${e.active ? `<span class="chip ${e.access === "tec" ? "c-info" : "c-good"}">${ACCESS[e.access][0]}</span>` : '<span class="chip c-mute">Desativado</span>'}</div>
    <div class="meta"><span class="num">${esc(e.phone) || "Sem telefone"}</span>${e.since ? `<span>Desde ${fd(e.since)}</span>` : ""}<span>${e.linked ? "Já entrou no app" : `<span class="down">Ainda não criou a senha</span>`}</span></div>
    ${e.access === "tec" ? `<div class="meta"><span>${ob.length ? ob.map(o => esc(clientById(o.client).name)).join(", ") : "Sem obra no momento"}</span></div>
    <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span>Feedbacks enviados (30 dias)</span><b class="num" style="color:var(--fg)">${rate === null ? "—" : rate + "%"}</b></div><div class="bar"><i style="width:${rate || 0}%"></i></div></div>` : `<div class="s">Trabalha no escritório, não envia feedback de obra.</div>`}
@@ -1356,6 +1356,7 @@ function staffForm(e) {
   <div class="field"><label>O que essa pessoa pode ver</label><div class="grid" style="gap:6px">${Object.entries(ACCESS).map(([k, [l, d]]) => `<label class="task"><input type="radio" name="sfA" id="sfA_${k}" value="${k}" ${k === v.access ? "checked" : ""} ${e && e.dono ? "disabled" : ""}><span><b>${l}</b><br><span class="s">${d}</span></span></label>`).join("")}</div></div>
   ${n || e.dono ? "" : `<label class="task"><input type="checkbox" id="sfAct" ${v.active ? "checked" : ""}><span>Acesso ativo<br><span class="s">Desmarque quando a pessoa sair da empresa. O histórico das obras fica guardado.</span></span></label>`}
   ${e && e.dono ? `<p class="s" style="margin:0">Esta é a conta do dono: fica sempre ativa e como administrador.</p>` : ""}
+  ${e && e.oculto ? `<p class="s" style="margin:0">Conta de suporte: só você vê este cadastro. Os outros usuários não veem esta conta.</p>` : ""}
  </div>
  ${e && e.access === "tec" ? `<div><div class="eyebrow" style="margin-bottom:6px">Obras</div>${ob.length ? ob.map(o => `<div class="row"><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${o.resp === e.id ? "Responsável" : "Equipe"} · ${prazo(o)}</div></div>${stChip(o)}</div>`).join("") : `<p class="s" style="margin:0">Sem obra no momento.</p>`}</div>` : ""}
  <p class="s form-err" id="sfErr" hidden></p>
