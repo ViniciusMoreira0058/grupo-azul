@@ -292,6 +292,10 @@ a{color:var(--accent-2)}
 .empty p{margin:0}
 .form-err{margin:0;color:var(--bad)!important}
 .month-nav{display:flex;align-items:center;gap:10px}
+.dot-on{width:10px;height:10px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);flex:none}
+.dot-on.hoje{background:var(--accent-2);border-color:transparent;opacity:.6}
+.dot-on.on{background:var(--good);border-color:transparent;box-shadow:0 0 0 0 var(--good);animation:pulsaOn 1.8s infinite}
+@keyframes pulsaOn{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}70%{box-shadow:0 0 0 8px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
 .period{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 14px;margin-bottom:14px}
 .period .p-datas{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .period .p-datas label{display:flex;align-items:center;gap:6px}

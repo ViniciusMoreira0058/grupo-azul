@@ -291,12 +291,15 @@ const ICON = {
   rel: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   est: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/>',
   lem: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  usr: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="10" r="2.5"/>',
   os: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>'
 };
-const PAGES = [["dash", "Dashboard"], ["obr", "Obras"], ["lem", "Lembretes"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"]];
+const PAGES = [["dash", "Dashboard"], ["obr", "Obras"], ["lem", "Lembretes"], ["cli", "Clientes"], ["orc", "Orçamentos"], ["fin", "Financeiro"], ["rel", "Relatórios"], ["func", "Funcionários"], ["usr", "Usuários"]];
 const ALLOWED = { admin: PAGES.map(p => p[0]), fin: ["dash", "cli", "orc", "fin", "rel"], tec: ["obr"] };
 const SOON = [["est", "Estoque"], ["os", "Ordens de serviço"]];
-const can = p => ALLOWED[me.role].includes(p);
+// aba Usuários: só a conta de suporte (Vinicius). Por enquanto só na demonstração, aguardando aprovação
+const souSuporte = () => DEMO && me.role === "admin";
+const can = p => p === "usr" ? souSuporte() : ALLOWED[me.role].includes(p);
 function renderNav() {
   const pages = PAGES.filter(p => can(p[0]));
   const nLem = lemPend().filter(l => l.urg === "urgente" || (l.due && l.due <= HOJE)).length;
@@ -1189,6 +1192,37 @@ function obraForm(o) {
   };
 }
 VIEWS.obr = () => me.role === "tec" ? viewObrasTec() : viewObrasAdmin();
+/* ---------- Usuários: quem está usando o app (só a conta de suporte) ---------- */
+function presencaDemo() {
+  // dados fictícios: minutos desde o último uso de cada pessoa
+  const MIN = [0, 2, 0, 35, 4, 190, 0, 600, 1500, 3, 2900, 9000, null], APAR = ["Celular Android", "iPhone", "Computador", "Celular Android", "iPhone"];
+  return staff.map((e, i) => {
+    const m = e.id === me.id ? 0 : e.active ? MIN[i % MIN.length] : 60 * 24 * 40 + i * 300;
+    return { e, min: m, apar: e.id === me.id ? "Computador" : APAR[i % APAR.length], acessos: m == null ? 0 : m < 1440 ? 8 + (i * 7) % 30 : m < 10080 ? 2 + i % 6 : 0 };
+  });
+}
+function quandoTxt(min) {
+  if (min == null) return "Nunca entrou";
+  if (min < 5) return "Agora";
+  if (min < 60) return `Há ${min} min`;
+  const d = new Date(Date.now() - min * 6e4); if (DEMO && min >= 300) d.setHours(7 + min % 11, min % 60); const hh = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (min < 60 * 24 && d.getDate() === new Date().getDate()) return `Hoje às ${hh}`;
+  if (min < 60 * 48) return `Ontem às ${hh}`;
+  return `${d.toLocaleDateString("pt-BR")} às ${hh}`;
+}
+VIEWS.usr = () => {
+  const ps = presencaDemo().sort((a, b) => (a.min ?? 1e9) - (b.min ?? 1e9));
+  const on = ps.filter(p => p.min != null && p.min < 5), hoje = ps.filter(p => p.min != null && p.min < 60 * 24), sem = ps.filter(p => p.min != null && p.min < 60 * 24 * 7), nunca = ps.filter(p => p.min == null && p.e.active);
+  $("#main").innerHTML = head("Usuários", "Quem está usando o app e quando foi o último acesso de cada um") + `
+ <div class="note" style="margin:0 0 14px">🔒 Só você vê esta aba. Os outros administradores não sabem que ela existe.</div>
+ <div class="grid kpis" style="margin-bottom:14px">
+  <div class="card kpi"><div class="eyebrow">Usando agora</div><div class="v num up">${on.length}</div><div class="d">Ativos nos últimos 5 min</div></div>
+  <div class="card kpi"><div class="eyebrow">Usaram hoje</div><div class="v num">${hoje.length}</div></div>
+  <div class="card kpi"><div class="eyebrow">Últimos 7 dias</div><div class="v num">${sem.length}</div><div class="d">de ${ps.filter(p => p.e.active).length} com acesso ativo</div></div>
+  <div class="card kpi"><div class="eyebrow">Nunca entraram</div><div class="v num ${nunca.length ? "down" : ""}">${nunca.length}</div><div class="d">Cadastrados sem criar a senha</div></div>
+ </div>
+ <div class="card"><div class="list">${ps.map(p => { const agora = p.min != null && p.min < 5; return `<div class="row"><span class="dot-on ${agora ? "on" : p.min != null && p.min < 1440 ? "hoje" : ""}" title="${agora ? "Usando agora" : ""}"></span><div class="grow"><div class="t">${esc(p.e.name)}${p.e.id === me.id ? ' <span class="s">(você)</span>' : ""}</div><div class="s">${esc(p.e.role)} · ${ACCESS[p.e.access][0]}${p.e.active ? "" : " · acesso desativado"}${p.min != null ? ` · ${p.apar} · ${p.acessos} ${p.acessos === 1 ? "acesso" : "acessos"} na semana` : ""}</div></div><div style="text-align:right;white-space:nowrap"><b class="${agora ? "up" : p.min == null ? "down" : ""}">${agora ? "Usando agora" : quandoTxt(p.min)}</b>${agora || p.min == null ? "" : '<div class="s">último uso</div>'}</div></div>` }).join("")}</div></div>`;
+};
 /* ---------- Lembretes (só administradores) ---------- */
 const URG = { urgente: ["Urgente", "c-bad"], normal: ["Normal", "c-info"], lembrar: ["Só lembrar", "c-mute"] };
 const URG_ORD = { urgente: 0, normal: 1, lembrar: 2 };
