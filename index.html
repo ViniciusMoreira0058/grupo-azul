@@ -386,6 +386,77 @@ a.btn{text-decoration:none}
 @keyframes sp-nut{0%{transform:rotate(-30deg)}45%,99.9%{transform:rotate(30deg)}100%{transform:rotate(-30deg)}}
 @keyframes sp-drop{0%,40%{opacity:0;transform:translateY(0)}50%{opacity:1}100%{opacity:0;transform:translateY(26px)}}
 @media (prefers-reduced-motion: reduce){#splash .nut,#splash .wrench,#splash .drop{animation-duration:3s}}
+
+/* novidades da demonstração (novo.js): etapas, estoque, agenda, orçamento → obra */
+.et-track{position:relative;display:flex;gap:3px;height:12px}
+.et-seg{position:relative;border-radius:4px;background:var(--surface-2);overflow:hidden;min-width:6px}
+.et-seg i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.et-seg.ok i{background:var(--good)}
+.et-seg.cur{box-shadow:0 0 0 1.5px var(--accent-2)}
+.et-track.late .et-seg.cur i{background:var(--bad)}
+.et-track .pl-exp{top:-5px;bottom:-5px}
+.et-list{display:grid;gap:2px}
+.et-row{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:14px}
+.et-row:first-child{border-top:0}
+.et-row .grow{flex:1;min-width:0}
+.et-row.ok .grow{color:var(--muted)}
+.et-row.cur .grow{font-weight:700}
+.et-row .tick{font-size:10.5px;color:var(--muted)}
+.et-row .tick.on{background:var(--good);border-color:var(--good);color:#fff}
+.et-row.cur .tick{border-color:var(--accent-2);color:var(--accent-2)}
+.et-row .chip{white-space:nowrap}
+.et-resumo{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin:2px 0 8px}
+.et-resumo b{color:var(--fg)}
+.et-resumo b.up{color:var(--good)} .et-resumo b.down{color:var(--bad)}
+@media (max-width:560px){.et-ed-row{flex-wrap:wrap}.et-ed-row .etT{flex:1 1 calc(100% - 30px)}.et-ed-row .et-d{margin-left:26px;flex:1}}
+.et-ed{display:grid;gap:8px}
+.et-ed-row{display:flex;gap:8px;align-items:center}
+.et-ed-row .etT{flex:1;min-width:0}
+.et-d{display:flex;align-items:center;gap:6px}
+.et-d .input{width:70px}
+.niv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.niv button{display:grid;justify-items:center;gap:2px;padding:12px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface-2);color:var(--fg);font-weight:700;font-size:13.5px;text-align:center}
+.niv button span{font-size:24px;line-height:1}
+.niv button small{font-weight:500;color:var(--muted);font-size:11.5px}
+.niv button.on[data-n=bom]{border-color:var(--good);background:var(--good-soft)}
+.niv button.on[data-n=pouco]{border-color:var(--warn);background:var(--warn-soft)}
+.niv button.on[data-n=parado]{border-color:var(--bad);background:var(--bad-soft)}
+.et-fim{background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.bar-low i{background:var(--bad)}
+.alerta-est{border-color:var(--warn)}
+.mov{width:26px;height:26px;flex:none;border-radius:8px;display:grid;place-items:center;font-weight:800}
+.mov.entrada{background:var(--good-soft);color:var(--good)} .mov.saida{background:var(--accent-soft);color:var(--accent-2)}
+.nbadge.info{background:var(--accent)}
+.ag-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.ag-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:1100px){.ag-grid{grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);align-items:start}}
+.cal-card{padding:10px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-h{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding:4px 0;text-transform:uppercase;letter-spacing:.06em}
+.cal-d{position:relative;min-height:92px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:6px;text-align:left;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cal-d.fora{opacity:.4} .cal-d.dom{background:var(--surface-2)}
+.cal-d.hoje .n{background:var(--accent);color:#fff;border-radius:999px;padding:0 7px}
+.cal-d.sel{border-color:var(--accent-2);box-shadow:0 0 0 1.5px var(--accent-2)}
+.cal-d .n{font-weight:800;font-size:13px;align-self:flex-start}
+.cal-evs{display:grid;gap:2px}
+.cal-evs i{font-style:normal;font-size:11px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;padding:1px 5px;background:var(--accent-soft)}
+.cal-evs i.orc{background:var(--warn-soft)} .cal-evs i.manut,.cal-evs i.entrega{background:var(--good-soft)} .cal-evs i.reuniao{background:var(--surface-2)}
+.cal-evs i.mais{background:none;color:var(--muted)}
+.cal-ob{font-size:10.5px;color:var(--muted);margin-top:auto}
+.cal-dots{display:none;gap:3px;flex-wrap:wrap}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent-2)}
+.dot.orc{background:var(--warn)} .dot.manut,.dot.entrega{background:var(--good)} .dot.reuniao{background:var(--muted)} .dot.obra{background:transparent;border:1.5px solid var(--muted)}
+.cal-leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:10px}
+.cal-leg span{display:inline-flex;align-items:center;gap:6px}
+@media (max-width:760px){.cal-d{min-height:52px;padding:4px;align-items:center}.cal-d .n{align-self:center;font-size:12.5px}.cal-evs,.cal-ob{display:none}.cal-dots{display:flex;justify-content:center}}
+.ev-ic{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft)}
+.ev-ic.orc{background:var(--warn-soft)} .ev-ic.manut,.ev-ic.entrega{background:var(--good-soft)} .ev-ic.reuniao,.ev-ic.obra{background:var(--surface-2)}
+.row.feito .t{text-decoration:line-through;color:var(--muted)}
+.pdf-render{position:fixed;left:-10000px;top:0;width:794px}
+.pdf-render .paper{min-width:0;box-shadow:none;border-radius:0}
+.pdf-render .paper .ph .lines{display:none}
+.btn.pulse{animation:pulsaBtn 1.6s ease-in-out 3}
+@keyframes pulsaBtn{50%{box-shadow:0 0 0 6px var(--accent-soft)}}
 </style>
 </head>
 <body>
@@ -460,5 +531,6 @@ a.btn{text-decoration:none}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
+<script src="novo.js"></script>
 </body>
 </html>
