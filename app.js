@@ -67,7 +67,8 @@ let current = "dash";
 const FOTO_URL = {};      // caminho no storage → link temporário
 
 const clientById = id => clients.find(c => c.id === id) || { id, name: "—", contact: "", phone: "", city: "", obra: "", status: "", value: 0 };
-const emp = id => staff.find(e => e.id === id) || { id, name: "—", ini: "?", role: "" };
+const emp = id => staff.find(e => e.id === id) || { id, name: removidos.has(id) ? "Ex-funcionário" : "—", ini: "?", role: "" };
+const removidos = new Set();  // funcionários excluídos nesta sessão (demonstração)
 const qTotal = q => q.items.reduce((s, i) => s + (+i[1] || 0) * (+i[2] || 0), 0);
 
 /* ---------- tema ---------- */
@@ -229,7 +230,7 @@ $("#authBack").onclick = () => setAuthMode("login");
 
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
-  if (DEMO) { splashShow(); loadDemo(); const p = staff.find(s => s.access === demoRole && s.active); me = { id: p.id, name: p.name, ini: p.ini, role: demoRole, funcao: p.role, dono: !!p.dono }; enterApp(); splashHide(); return }
+  if (DEMO) { splashShow(); loadDemo(); const p = staff.find(s => s.access === demoRole && s.active); if (LGPD_V2) staff.forEach(s => { if (s.linked && s !== p) s.ciente = addDays(HOJE, -20) }); me = { id: p.id, name: p.name, ini: p.ini, role: demoRole, funcao: p.role, dono: !!p.dono }; enterApp(); splashHide(); return }
   const email = $("#lgEmail").value.trim().toLowerCase(), pass = $("#lgPass").value, pass2 = $("#lgPass2").value;
   const btn = $("#authGo"); btn.disabled = true; authMsg("");
   try {
@@ -320,7 +321,7 @@ function enterApp() {
   $("#topAvatar").textContent = me.ini; $("#topAvatar").title = me.name;
   $("#today").textContent = `${DIA[TODAY.getDay()].slice(0, 3)}, ${TODAY.getDate()} ${MES3[TODAY.getMonth()].toLowerCase()}`;
   const h = location.hash.slice(1); go(PAGES.some(p => p[0] === h) ? h : ALLOWED[me.role][0]);
-  setTimeout(welcome, 80);
+  setTimeout(() => LGPD_V2 ? avisoPriv(welcome) : welcome(), 80);
 }
 
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.setAttribute("role", "status"); document.body.appendChild(t); setTimeout(() => t.remove(), 3200) }
@@ -497,8 +498,9 @@ function clientDetail(id) {
  <div class="card" style="background:var(--surface-2)"><div class="card-head" style="margin-bottom:8px"><b>${esc(o ? o.title : c.obra) || "Sem serviço definido"}</b>${chip(c.status)}</div>
   ${o ? `<div class="meta"><span>Início ${fd(o.start)}</span><span>Previsão ${fd(o.end)}</span><span class="num">Contrato ${brl0(c.value)}</span></div><div class="bar"><i style="width:${o.pct}%"></i></div><div class="meta" style="margin-top:6px"><span>${o.pct}% concluído</span></div>` : `<div class="meta"><span>Nenhuma obra cadastrada</span>${c.value ? `<span class="num">Contrato ${brl0(c.value)}</span>` : ""}</div>`}</div>
  <div><div class="eyebrow" style="margin-bottom:6px">Orçamentos</div><div class="list">${qs.length ? qs.map(q => `<div class="row"><div class="grow"><div class="t">${esc(q.n)} · ${esc(q.title)}</div><div class="s">${fd(q.date)}</div></div><span class="num" style="font-weight:700">${brl0(qTotal(q))}</span>${chip(q.status)}</div>`).join("") : `<p class="s" style="margin:0">Nenhum orçamento ainda.</p>`}</div></div>
- <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" id="cdQuote">+ Orçamento</button><button class="btn primary" id="cdEdit">Editar cliente</button></div>`);
+ <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">${LGPD_V2 && me.role === "admin" ? `<button class="btn ghost" id="cdDel">Excluir cliente</button>` : "<span></span>"}<span style="display:flex;gap:8px"><button class="btn" id="cdQuote">+ Orçamento</button><button class="btn primary" id="cdEdit">Editar cliente</button></span></div>`);
   $("#cdEdit").onclick = () => clientForm(c);
+  const cd = $("#cdDel"); if (cd) cd.onclick = () => excluirCliente(c);
   $("#cdQuote").onclick = () => { go("orc"); quoteForm(null, c.id) };
 }
 
@@ -1156,7 +1158,8 @@ function obraDetail(o) {
  <div><div class="eyebrow" style="margin-bottom:8px">Feedbacks da equipe</div>${o.log.length ? o.log.slice(0, 30).map(l => `<div class="log"><div><b>${fd(l.d)}</b> · ${esc(emp(l.who).name)} · <span class="num">${l.pct}%</span></div><div>${esc(l.text)}</div>${l.problem ? `<div class="down" style="font-size:13px">⚠ ${esc(l.problem)}</div>` : ""}${l.fotos && l.fotos.length ? `<div class="thumbs">${thumbs(l.fotos)}</div>` : ""}</div>`).join("") : `<p class="s" style="margin:0">Nenhum feedback ainda.</p>`}</div>
  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="odDel">Excluir obra</button><span style="display:flex;gap:8px"><button class="btn" data-close>Fechar</button><button class="btn primary" id="odEdit">Editar obra</button></span></div>`, true);
   $("#odEdit").onclick = () => obraForm(o);
-  twoStep($("#odDel"), "Confirmar: excluir obra e feedbacks", () => { closeModal(); act(async () => { if (DEMO) obras = obras.filter(x => x !== o); else await live(sb.from("ga_obras").delete().eq("id", o.id)) }, "Obra excluída") });
+  const nf = fotosDe([o]).length;
+  twoStep($("#odDel"), LGPD_V2 && nf ? `Confirmar: excluir obra, feedbacks e ${nf} ${nf === 1 ? "foto" : "fotos"}` : "Confirmar: excluir obra e feedbacks", () => { closeModal(); act(async () => { if (DEMO) { obras = obras.filter(x => x !== o); if (LGPD_V2) desligarLanc([o.id]) } else await live(sb.from("ga_obras").delete().eq("id", o.id)) }, LGPD_V2 && nf ? `Obra excluída, com ${nf} ${nf === 1 ? "foto apagada" : "fotos apagadas"}` : "Obra excluída") });
 }
 function obraForm(o) {
   if (!clients.length) { toast("Cadastre o cliente antes de cadastrar a obra."); go("cli"); return }
@@ -1356,10 +1359,12 @@ function staffForm(e) {
   <div class="field"><label>O que essa pessoa pode ver</label><div class="grid" style="gap:6px">${Object.entries(ACCESS).map(([k, [l, d]]) => `<label class="task"><input type="radio" name="sfA" id="sfA_${k}" value="${k}" ${k === v.access ? "checked" : ""} ${e && e.dono ? "disabled" : ""}><span><b>${l}</b><br><span class="s">${d}</span></span></label>`).join("")}</div></div>
   ${n || e.dono ? "" : `<label class="task"><input type="checkbox" id="sfAct" ${v.active ? "checked" : ""}><span>Acesso ativo<br><span class="s">Desmarque quando a pessoa sair da empresa. O histórico das obras fica guardado.</span></span></label>`}
   ${e && e.dono ? `<p class="s" style="margin:0">Esta é a conta do dono: fica sempre ativa e como administrador.</p>` : ""}
+  ${LGPD_V2 && e ? `<p class="s" style="margin:0">Aviso de privacidade: ${e.ciente ? `<b style="color:var(--fg)">ciente desde ${fd(e.ciente)}</b>` : "ainda não leu (aparece no primeiro acesso)"}</p>` : ""}
  </div>
  ${e && e.access === "tec" ? `<div><div class="eyebrow" style="margin-bottom:6px">Obras</div>${ob.length ? ob.map(o => `<div class="row"><div class="grow"><div class="t">${esc(clientById(o.client).name)}</div><div class="s">${o.resp === e.id ? "Responsável" : "Equipe"} · ${prazo(o)}</div></div>${stChip(o)}</div>`).join("") : `<p class="s" style="margin:0">Sem obra no momento.</p>`}</div>` : ""}
  <p class="s form-err" id="sfErr" hidden></p>
- <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${e && !e.dono && e.phone && e.email ? `<a class="btn" href="${waLink(e.phone, inviteText(e))}" target="_blank" rel="noopener">Enviar acesso pelo WhatsApp</a>` : ""}<button class="btn" data-close>Cancelar</button><button class="btn primary" id="sfSave">${n ? "Cadastrar" : "Salvar alterações"}</button></div>`, true);
+ <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">${LGPD_V2 && e && !e.dono && e.id !== me.id ? `<button class="btn ghost" id="sfDel" style="margin-right:auto">Excluir cadastro</button>` : ""}${e && !e.dono && e.phone && e.email ? `<a class="btn" href="${waLink(e.phone, inviteText(e))}" target="_blank" rel="noopener">Enviar acesso pelo WhatsApp</a>` : ""}<button class="btn" data-close>Cancelar</button><button class="btn primary" id="sfSave">${n ? "Cadastrar" : "Salvar alterações"}</button></div>`, true);
+  const sd = $("#sfDel"); if (sd) sd.onclick = () => excluirFuncionario(e);
   $("#sfSave").onclick = () => {
     const err = m => { $("#sfErr").textContent = m; $("#sfErr").hidden = false };
     const name = $("#sfN").value.trim(), email = $("#sfE").value.trim().toLowerCase();
@@ -1375,6 +1380,99 @@ function staffForm(e) {
       await live(n ? sb.from("ga_equipe").insert(row) : sb.from("ga_equipe").update(row).eq("id", e.id));
     }, n ? `${name} cadastrado. Abra o cadastro para enviar o acesso pelo WhatsApp.` : "Cadastro atualizado");
   };
+}
+
+/* =====================================================================
+   PRIVACIDADE (LGPD): aviso no primeiro acesso, política, exclusão de dados
+   Por enquanto só na demonstração (LGPD_V2 = DEMO).
+   ===================================================================== */
+const LGPD_V2 = DEMO;
+const PRIV_VERSAO = "2026-10";
+const PRIV_RESUMO = {
+  admin: ["Dados da equipe: nome, função, telefone, e-mail, CPF, admissão e diária.", "Dados de clientes: nome, contato, telefone, endereço da obra e orçamentos.", "Financeiro, feedbacks e fotos das obras."],
+  fin: ["Dados de clientes: nome, contato, telefone e orçamentos.", "Entradas, saídas e comprovantes do financeiro.", "Seu nome e e-mail de login."],
+  tec: ["Seu nome, função, telefone e e-mail de login.", "Os feedbacks, fotos e pedidos de material que você envia.", "As obras em que você está escalado."]
+};
+function avisoPriv(depois) {
+  const eu = staff.find(s => s.id === me.id);
+  if (!eu || eu.ciente) { depois(); return }
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Primeiro acesso</div><h2>Aviso de privacidade</h2></div></div>
+ <p style="margin:0">Olá, ${esc(firstName(me.name))}. Antes de começar, veja quais dados pessoais o app do ${esc(EMPRESA.nome)} guarda e por quê.</p>
+ <div class="card" style="background:var(--surface-2)"><div class="eyebrow" style="margin-bottom:6px">O que você vai ver ou registrar aqui</div>${PRIV_RESUMO[me.role].map(t => `<div class="task"><span class="tick on">✓</span><span>${esc(t)}</span></div>`).join("")}</div>
+ <div class="grid" style="gap:6px;font-size:14px">
+  <div><b>Para quê:</b> organizar as obras, a equipe, os orçamentos e o financeiro da empresa. Nada é vendido nem usado para propaganda.</div>
+  <div><b>Quem vê:</b> cada pessoa só vê o que precisa para o seu trabalho. ${me.role === "tec" ? "Você vê só as obras em que está." : "Funcionários de campo veem só as obras deles."}</div>
+  <div><b>Seus direitos:</b> você pode pedir para ver, corrigir ou apagar seus dados falando com o escritório.</div>
+ </div>
+ <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><button class="linkbtn" id="avPol">Ler a política completa</button><button class="btn primary" id="avOk">Li e estou ciente</button></div>`);
+  $("#modalRoot .modal").onclick = null;  // só fecha confirmando
+  $("#avPol").onclick = () => politicaPriv(() => avisoPriv(depois));
+  $("#avOk").onclick = () => { eu.ciente = HOJE; eu.privVersao = PRIV_VERSAO; closeModal(); toast("Obrigado! Você pode reler a política no menu, em Privacidade."); setTimeout(depois, 300) };
+}
+function politicaPriv(voltar) {
+  const E = EMPRESA, quem = [E.nome, E.cnpj && "CNPJ " + E.cnpj, E.endereco].filter(Boolean).join(", ");
+  const sec = (t, h) => `<div><h3 style="font-size:15px;margin:0 0 4px">${t}</h3><div style="font-size:14px;line-height:1.55">${h}</div></div>`;
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Versão ${PRIV_VERSAO}</div><h2>Política de privacidade</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ <div class="card note-warn" style="margin:0;font-size:13px">Texto modelo para a demonstração. Revise com um advogado antes de usar no app de verdade.</div>
+ <div class="grid" style="gap:14px">
+ ${sec("1. Quem cuida dos seus dados", `${esc(quem)} é a empresa responsável (controladora) pelos dados deste app. Para qualquer pedido sobre seus dados, fale com o encarregado pelo ${esc([E.email, E.telefone].filter(Boolean).join(" ou "))}.`)}
+ ${sec("2. Quais dados guardamos", `<b>Equipe:</b> nome, função, telefone, e-mail, CPF, data de admissão, valor da diária e o que a pessoa registra nas obras (feedbacks, fotos, pedidos de material).<br><b>Clientes:</b> nome, pessoa de contato, telefone, endereço da obra, serviços e orçamentos.<br><b>Financeiro:</b> entradas, saídas, nomes de clientes e fornecedores e comprovantes.<br><b>Acesso:</b> e-mail de login e data do último acesso. A senha fica guardada de forma criptografada e ninguém da empresa consegue vê-la.`)}
+ ${sec("3. Para que usamos", `Para cumprir os contratos com clientes e funcionários (obras, orçamentos, pagamentos), cumprir obrigações legais (fiscais e trabalhistas) e acompanhar a qualidade e a segurança das obras. Não vendemos dados e não usamos para propaganda.`)}
+ ${sec("4. Quem tem acesso", `Cada perfil vê só o necessário: o dono e os administradores veem tudo; o financeiro vê clientes, orçamentos, financeiro e relatórios; os funcionários de campo veem só as obras em que estão. Os dados ficam em serviços contratados para hospedar o app (Supabase, banco de dados e arquivos; Vercel, o site), que só os processam para nós. Podemos compartilhar com o contador o que for necessário para obrigações fiscais.`)}
+ ${sec("5. Onde ficam e por quanto tempo", `Os dados ficam em servidores na nuvem, com acesso protegido por senha e conexão criptografada. Guardamos enquanto houver relação com a pessoa e, depois, só pelo prazo que a lei exige (por exemplo, registros financeiros e trabalhistas). Fotos e registros de obras excluídas são apagados junto com a obra.`)}
+ ${sec("6. Seus direitos", `Você pode pedir a qualquer momento para confirmar se temos seus dados, ver uma cópia, corrigir, apagar o que não for obrigatório guardar, e saber com quem compartilhamos. Também pode reclamar na ANPD (Autoridade Nacional de Proteção de Dados). Respondemos em até 15 dias.`)}
+ ${sec("7. Mudanças nesta política", `Se esta política mudar, o app mostra o aviso de novo no próximo acesso.`)}
+ </div>
+ <div style="display:flex;justify-content:flex-end"><button class="btn primary" id="polOk">${voltar ? "Voltar" : "Fechar"}</button></div>`, true);
+  $("#polOk").onclick = () => { closeModal(); if (voltar) voltar() };
+  if (voltar) { $$("#modalRoot [data-close]").forEach(b => b.onclick = () => { closeModal(); voltar() }); $("#modalRoot .modal").onclick = null }
+}
+const fotosDe = os => os.flatMap(o => o.log.flatMap(l => l.fotos || []));
+// lançamentos financeiros ficam (obrigação fiscal), mas perdem o vínculo com a obra apagada
+function desligarLanc(obraIds, nomes = []) {
+  lanc.forEach(l => { if (obraIds.includes(l.obra)) l.obra = null; if (nomes.includes(l.who)) l.who = "Cliente excluído" });
+}
+function excluirCliente(c) {
+  const os = obras.filter(o => o.client === c.id), qs = quotes.filter(q => q.client === c.id), nf = fotosDe(os).length;
+  const nl = lanc.filter(l => os.some(o => o.id === l.obra) || l.who === c.name).length;
+  const pl = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Excluir de vez</div><h2>${esc(c.name)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ <p style="margin:0">Use quando o cliente pedir para apagar os dados dele. Não dá para desfazer.</p>
+ <div class="card" style="background:var(--surface-2)"><div class="eyebrow" style="margin-bottom:6px">Vai ser apagado</div>
+  <div class="task"><span class="tick on">✓</span><span>Cadastro do cliente (nome, contato, telefone, endereço)</span></div>
+  <div class="task"><span class="tick on">✓</span><span>${pl(qs.length, "orçamento", "orçamentos")} e ${pl(os.length, "obra", "obras")}, com os feedbacks${nf ? ` e ${pl(nf, "foto", "fotos")}` : ""}</span></div></div>
+ ${nl ? `<div class="card" style="background:var(--surface-2)"><div class="eyebrow" style="margin-bottom:6px">Fica guardado</div><div style="font-size:14px">${pl(nl, "lançamento", "lançamentos")} do financeiro, porque a lei manda guardar os registros fiscais. O nome do cliente sai deles e aparece como "Cliente excluído".</div></div>` : ""}
+ <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="xcOk">Excluir cliente</button></div>`);
+  twoStep($("#xcOk"), "Confirmar exclusão", () => {
+    closeModal();
+    act(async () => {
+      const ids = os.map(o => o.id);
+      clients = clients.filter(x => x !== c); quotes = quotes.filter(q => q.client !== c.id); obras = obras.filter(o => o.client !== c.id);
+      desligarLanc(ids, [c.name, c.contact].filter(Boolean));
+    }, "Cliente e dados excluídos");
+  });
+}
+function excluirFuncionario(e) {
+  const ob = obras.filter(o => o.resp === e.id || o.team.includes(e.id)), nfb = obras.reduce((t, o) => t + o.log.filter(l => l.who === e.id).length, 0);
+  modal(`<div class="sheet-head"><div><div class="eyebrow">Excluir de vez</div><h2>${esc(e.name)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
+ <p style="margin:0">Use quando a pessoa pedir para apagar os dados dela. Se ela só saiu da empresa, prefira desmarcar "Acesso ativo". Não dá para desfazer.</p>
+ <div class="card" style="background:var(--surface-2)"><div class="eyebrow" style="margin-bottom:6px">Vai ser apagado</div>
+  <div class="task"><span class="tick on">✓</span><span>Nome, telefone, e-mail, CPF, admissão, diária e a senha de acesso</span></div>
+  ${ob.length ? `<div class="task"><span class="tick on">✓</span><span>Sai da equipe de ${ob.length} ${ob.length === 1 ? "obra" : "obras"}</span></div>` : ""}</div>
+ ${nfb ? `<div class="card" style="background:var(--surface-2)"><div class="eyebrow" style="margin-bottom:6px">Fica guardado, sem o nome</div><div style="font-size:14px">${nfb} ${nfb === 1 ? "feedback" : "feedbacks"} de obra, porque fazem parte do histórico da obra do cliente. Passam a aparecer como "Ex-funcionário".</div></div>` : ""}
+ <div class="note" style="margin:0;font-size:13px">Recibos e documentos trabalhistas que a lei manda guardar ficam fora do app, com o contador.</div>
+ <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="xfOk">Excluir cadastro</button></div>`);
+  twoStep($("#xfOk"), "Confirmar exclusão", () => {
+    closeModal();
+    act(async () => {
+      staff = staff.filter(x => x !== e); removidos.add(e.id);
+      obras.forEach(o => { if (o.resp === e.id) o.resp = null; o.team = o.team.filter(id => id !== e.id) });
+    }, `Cadastro de ${firstName(e.name)} excluído`);
+  });
+}
+if (LGPD_V2) {
+  $("#privLogin").hidden = false; $("#privLogin").onclick = () => politicaPriv();
+  $("#privBtn").hidden = false; $("#privBtn").onclick = () => { closeDrawer(); politicaPriv() };
 }
 
 /* ---------- login 3D e profundidade ---------- */
