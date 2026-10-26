@@ -1404,7 +1404,10 @@ VIEWS.func = () => {
   };
   $("#fSearch").oninput = draw; $("#fNew").onclick = () => staffForm(null); draw();
 };
+// gancho para gravar dados extras do cadastro (ferramentas) depois de salvar a pessoa
+let aoSalvarEquipe = null;
 function staffForm(e) {
+  aoSalvarEquipe = null;
   const n = !e, v = e || { name: "", role: "Encanador", phone: "", email: "", cpf: "", since: HOJE, daily: "", access: "tec", active: true };
   const ob = e ? obras.filter(o => (o.resp === e.id || o.team.includes(e.id)) && o.pct < 100) : [];
   modal(`<div class="sheet-head"><div><div class="eyebrow">${n ? "Cadastro" : "Funcionário"}</div><h2>${n ? "Novo funcionário" : esc(e.name)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
@@ -1431,9 +1434,11 @@ function staffForm(e) {
     const d = { name, role: $("#sfR").value, phone: $("#sfP").value.trim(), cpf: $("#sfC").value.trim(), since: $("#sfS").value || null, daily: +$("#sfD").value || 0, email, access: e && e.dono ? "admin" : document.querySelector("input[name=sfA]:checked").value, active: n || e.dono ? true : $("#sfAct").checked };
     closeModal();
     act(async () => {
-      if (DEMO) { if (n) staff.push({ id: "e" + Date.now(), ...d, ini: initials(name), linked: false }); else Object.assign(e, d, { ini: initials(name), linked: e.linked && e.email === email }); return }
+      const extra = aoSalvarEquipe;
+      if (DEMO) { const id = n ? "e" + Date.now() : e.id; if (n) staff.push({ id, ...d, ini: initials(name), linked: false }); else Object.assign(e, d, { ini: initials(name), linked: e.linked && e.email === email }); if (extra) await extra(id); return }
       const row = { nome: d.name, funcao: d.role, telefone: d.phone, cpf: d.cpf, admissao: d.since, diaria: d.daily, email: d.email, acesso: d.access, ativo: d.active };
-      await live(n ? sb.from("ga_equipe").insert(row) : sb.from("ga_equipe").update(row).eq("id", e.id));
+      const novo = await live(n ? sb.from("ga_equipe").insert(row).select("id").single() : sb.from("ga_equipe").update(row).eq("id", e.id));
+      if (extra) await extra(n ? novo.id : e.id);
     }, n ? `${name} cadastrado. Abra o cadastro para enviar o acesso pelo WhatsApp.` : "Cadastro atualizado");
   };
 }
