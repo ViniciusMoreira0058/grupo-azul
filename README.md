@@ -30,7 +30,8 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 9. **Conta de suporte oculta**: rode `supabase/005_conta_oculta.sql`. A conta `barbeariavm0058@gmail.com` continua administradora, mas some de Funcionários e das listas para os outros usuários.
 10. **Aba Usuários**: rode `supabase/006_usuarios_presenca.sql`. Só a conta de suporte oculta vê quem está usando o app e o último acesso de cada um.
 11. **Etapas, Estoque, Agenda e Ferramentas**: rode `supabase/007_etapas_estoque_agenda.sql`. Até rodar, o app segue como antes e essas abas mostram o aviso.
-12. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
+12. **Ordens de serviço**: rode `supabase/008_ordens_servico.sql` (depois do 007).
+13. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
 
 ## Segurança
 

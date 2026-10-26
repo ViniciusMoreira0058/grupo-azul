@@ -1,7 +1,9 @@
 /* Ordens de serviço: serviços rápidos que não são uma obra inteira
    (vazamento, troca de registro, manutenção, visita técnica).
-   Por enquanto só na demonstração (?demo=1). */
-if (DEMO) (() => {
+   No app real precisa do supabase/008_ordens_servico.sql. */
+(() => {
+  let falta008 = false, osEst = [];
+  const osOk = () => DEMO || !falta008;
   const TIPOS_OS = { vazamento: ["Vazamento", "💧"], desentup: ["Desentupimento", "🚿"], troca: ["Troca de peça", "🔧"], manut: ["Manutenção", "🛠️"], instal: ["Instalação", "🔩"], visita: ["Visita técnica", "🔎"] };
   const ST = { "Aberta": "c-info", "Em andamento": "c-warn", "Concluída": "c-good", "Cancelada": "c-mute" };
   const PAGS = ["PIX", "Dinheiro", "Cartão", "Boleto"];
@@ -52,6 +54,7 @@ if (DEMO) (() => {
 
   /* ---------- lista ---------- */
   VIEWS.os = () => {
+    if (!osOk()) { $("#main").innerHTML = head("Ordens de serviço", "Serviços rápidos que não são obra") + `<div class="card"><h2>Quase pronto</h2><p class="s" style="margin:6px 0 0">${me.role === "admin" ? "Para usar esta parte, rode o arquivo <b>008_ordens_servico.sql</b> no SQL Editor do Supabase." : "Esta parte ainda está sendo preparada pelo administrador."}</p></div>`; return }
     const tec = me.role === "tec", t = osQ.trim().toLowerCase();
     const base = tec ? minhas() : ordens;
     const filtra = o => osFiltro === "todas" || (osFiltro === "abertas" ? ["Aberta", "Em andamento"].includes(o.status) : osFiltro === "concluidas" ? o.status === "Concluída" : o.status === "Cancelada");
@@ -102,7 +105,11 @@ if (DEMO) (() => {
       const cli = +$("#ofC").value, c = clientById(cli);
       const d = { tipo, cli, local: $("#ofL").value.trim(), problema, tec: $("#ofTec").value, d: $("#ofD").value || HOJE, h: $("#ofH").value || "09:00", valor: +$("#ofV").value || 0, contato: c.contact || c.name };
       closeModal();
-      act(async () => { if (o) Object.assign(o, d); else { const id = nextId(ordens); ordens.push({ id, n: numOS(30 + id), ...d, status: "Aberta", feito: "", mat: [], mao: 0, fotosAntes: [], fotosDepois: [], assin: "", assinNome: "" }) } }, o ? "OS atualizada" : `OS aberta para ${firstName(emp(d.tec).name)} · ${fd(d.d)} às ${d.h}`);
+      act(async () => {
+        if (DEMO) { if (o) Object.assign(o, d); else { const id = nextId(ordens); ordens.push({ id, n: numOS(30 + id), ...d, status: "Aberta", feito: "", mat: [], mao: 0, fotosAntes: [], fotosDepois: [], assin: "", assinNome: "" }) } return }
+        const row = { tipo: d.tipo, cliente_id: d.cli, local: d.local, problema: d.problema, tecnico: d.tec, data: d.d, hora: d.h, valor: d.valor, contato: d.contato };
+        await live(o ? sb.from("ga_os").update(row).eq("id", o.id) : sb.from("ga_os").insert(row));
+      }, o ? "OS atualizada" : `OS aberta para ${firstName(emp(d.tec).name)} · ${fd(d.d)} às ${d.h}`);
     };
   }
 
@@ -110,7 +117,7 @@ if (DEMO) (() => {
   function osDetail(o) {
     const c = clientById(o.cli), tec = me.role === "tec", aberta = ["Aberta", "Em andamento"].includes(o.status), fechada = o.status === "Concluída";
     const zap = c.phone ? waLink(c.phone, `Olá ${firstName(o.contato || c.name)}, tudo bem? Aqui é do Grupo Azul. Confirmando o atendimento (${TIPOS_OS[o.tipo][0].toLowerCase()}) ${o.d === HOJE ? "hoje" : "no dia " + fd(o.d)} às ${o.h} com ${firstName(emp(o.tec).name)}.`) : "";
-    const fotos = (l, t) => l.length ? `<div><div class="eyebrow" style="margin-bottom:6px">${t}</div><div class="os-fotos">${l.map(u => `<img src="${esc(u)}" alt="">`).join("")}</div></div>` : "";
+    const fotos = (l, t) => l.length ? `<div><div class="eyebrow" style="margin-bottom:6px">${t}</div><div class="os-fotos">${l.map(fotoUrl).filter(Boolean).map(u => `<img src="${esc(u)}" alt="">`).join("")}</div></div>` : "";
     modal(`<div class="sheet-head"><div><div class="eyebrow">${o.n} · ${TIPOS_OS[o.tipo][1]} ${TIPOS_OS[o.tipo][0]}</div><h2>${esc(c.name)}</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
  <div class="et-resumo"><span class="chip ${ST[o.status]}">${o.status}</span><span>📅 <b>${quando(o)}</b></span><span>👷 ${esc(emp(o.tec).name)}</span>${o.contato ? `<span>👤 ${esc(o.contato)}</span>` : ""}${valorOS(o) ? `<span>💰 <b>${brl(valorOS(o))}</b>${fechada ? (o.pago ? " · recebido" : " · a receber") : " combinado"}</span>` : ""}</div>
  <div class="note" style="margin:0"><b>Problema:</b> ${esc(o.problema)}</div>
@@ -123,17 +130,21 @@ if (DEMO) (() => {
   <span style="display:flex;gap:8px;flex-wrap:wrap">${o.status === "Aberta" ? `<button class="btn" id="odIni">Iniciar atendimento</button>` : ""}${aberta ? `<button class="btn primary" id="odFech">Fechar OS</button>` : ""}${fechada ? `${!tec && !o.pago ? `<button class="btn" id="odPago">Marcar como recebido</button>` : ""}<button class="btn" id="odPrint">Imprimir</button><button class="btn primary" id="odZap">📲 Enviar PDF no WhatsApp</button>` : ""}</span></div>`, true);
     const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn };
     on("#odEdit", () => osForm(o));
-    const cb = $("#odCanc"); if (cb) twoStep(cb, "Confirmar: cancelar", () => { closeModal(); act(async () => { o.status = "Cancelada" }, `${o.n} cancelada`) });
-    on("#odIni", () => { closeModal(); act(async () => { o.status = "Em andamento" }, "Atendimento iniciado") });
+    const cb = $("#odCanc"); if (cb) twoStep(cb, "Confirmar: cancelar", () => { closeModal(); act(async () => { if (DEMO) o.status = "Cancelada"; else await live(sb.from("ga_os").update({ status: "Cancelada" }).eq("id", o.id)) }, `${o.n} cancelada`) });
+    on("#odIni", () => { closeModal(); act(async () => { if (DEMO) o.status = "Em andamento"; else await live(sb.rpc("ga_os_iniciar", { p_id: o.id })) }, "Atendimento iniciado") });
     on("#odFech", () => osFechar(o));
-    on("#odPago", () => { closeModal(); act(async () => { o.pago = true; const l = lanc.find(x => x.desc.startsWith(o.n + " ")); if (l) { l.paid = true; l.d = HOJE } }, "Recebimento confirmado") });
+    on("#odPago", () => { closeModal(); act(async () => {
+      if (DEMO) { o.pago = true; const l = lanc.find(x => x.desc.startsWith(o.n + " ")); if (l) { l.paid = true; l.d = HOJE } return }
+      await live(sb.from("ga_os").update({ pago: true }).eq("id", o.id));
+      if (o.lanc) await live(sb.from("ga_lancamentos").update({ pago: true, data: HOJE }).eq("id", o.lanc));
+    }, "Recebimento confirmado") });
     on("#odPrint", () => printPaper(osPaper(o), o.n));
     on("#odZap", () => window.gaEnviarPdfWhats(osPaper(o), `${o.n} - ${c.name}`, c.phone, `Olá ${firstName(o.contato || c.name)}, segue a ordem de serviço ${o.n} do Grupo Azul (${TIPOS_OS[o.tipo][0].toLowerCase()}), total de ${brl(totalOS(o))}. Obrigado pela confiança!`));
   }
 
   /* ---------- fechar: o que foi feito, material, fotos e assinatura ---------- */
   function osFechar(o) {
-    const c = clientById(o.cli), est = window.gaEstoque ? window.gaEstoque.itens() : [];
+    const c = clientById(o.cli), est = !DEMO && me.role === "tec" ? osEst : window.gaEstoque ? window.gaEstoque.itens().filter(i => i.qtd > 0) : [];
     let mat = o.mat.map(m => ({ ...m })), antes = [...o.fotosAntes], depois = [...o.fotosDepois], assinou = false;
     modal(`<div class="sheet-head"><div><div class="eyebrow">${o.n} · ${esc(c.name)}</div><h2>Fechar ordem de serviço</h2></div><button class="x" data-close aria-label="Fechar">×</button></div>
  <div class="field"><label for="ffF">O que foi feito</label><textarea class="input" id="ffF" placeholder="Ex.: trocamos o reparo da válvula e testamos a descarga">${esc(o.feito)}</textarea></div>
@@ -155,11 +166,11 @@ if (DEMO) (() => {
       tot();
     };
     drawMat(); $("#ffM").oninput = tot;
-    $("#ffI").onchange = () => { const v = $("#ffI").value, i = est.find(x => x.id === +v); $("#ffN").hidden = v !== "outro"; if (i) $("#ffV").value = Math.round(i.custo * 1.5 * 100) / 100; if (v === "outro") $("#ffN").focus() };
+    $("#ffI").onchange = () => { const v = $("#ffI").value, i = est.find(x => x.id === +v); $("#ffN").hidden = v !== "outro"; if (i) $("#ffV").value = i.preco != null ? i.preco : Math.round(i.custo * 1.5 * 100) / 100; if (v === "outro") $("#ffN").focus() };
     $("#ffAdd").onclick = () => {
       const v = $("#ffI").value, i = est.find(x => x.id === +v), nome = i ? i.nome : $("#ffN").value.trim(), qtd = +$("#ffQ").value || 0;
       if (!nome || qtd <= 0) { $("#ffErr").textContent = "Escolha o material e a quantidade."; $("#ffErr").hidden = false; return }
-      if (i && qtd > i.qtd) { $("#ffErr").textContent = `No estoque só tem ${(+i.qtd).toLocaleString("pt-BR")} ${i.un}.`; $("#ffErr").hidden = false; return }
+      if (i && qtd > i.qtd) { $("#ffErr").textContent = `No estoque só tem ${(+i.qtd).toLocaleString("pt-BR")} ${i.un || ""}.`; $("#ffErr").hidden = false; return }
       $("#ffErr").hidden = true; mat.push({ nome, qtd, v: +$("#ffV").value || 0, item: i ? i.id : null });
       $("#ffI").value = ""; $("#ffN").value = ""; $("#ffN").hidden = true; $("#ffQ").value = 1; $("#ffV").value = ""; drawMat();
     };
@@ -182,21 +193,22 @@ if (DEMO) (() => {
       const feito = $("#ffF").value.trim(), aus = $("#ffAus").checked, err = m => { $("#ffErr").textContent = m; $("#ffErr").hidden = false };
       if (!feito) return err("Conte o que foi feito.");
       if (!assinou && !aus) return err("Peça a assinatura do cliente ou marque que ele não estava no local.");
-      const d = { feito, mat, mao: +$("#ffM").value || 0, pay: $("#ffPay").value, fotosAntes: antes, fotosDepois: depois, assin: assinou && !aus ? cv.toDataURL("image/png") : "", assinNome: aus ? "" : $("#ffSN").value.trim(), pago: !!($("#ffPago") && $("#ffPago").checked), status: "Concluída", fechadaEm: HOJE };
+      const d = { feito, mat, mao: +$("#ffM").value || 0, pay: $("#ffPay").value, fotosAntes: antes, fotosDepois: depois, assin: assinou && !aus ? cv.toDataURL("image/jpeg", .85) : "", assinNome: aus ? "" : $("#ffSN").value.trim(), pago: !!($("#ffPago") && $("#ffPago").checked), status: "Concluída", fechadaEm: HOJE };
       closeModal();
       act(async () => {
+        if (!DEMO) return void await live(sb.rpc("ga_os_fechar", { p_id: o.id, p_feito: d.feito, p_materiais: mat.map(m => ({ nome: m.nome, qtd: m.qtd, v: m.v, item: m.item || null })), p_mao: d.mao, p_forma: d.pay, p_fotos_antes: antes, p_fotos_depois: depois, p_assinatura: d.assin, p_assin_nome: d.assinNome, p_pago: d.pago }));
         Object.assign(o, d);
         mat.filter(m => m.item).forEach(m => window.gaEstoque.baixa(m.item, m.qtd, `${o.n} · ${c.name}`));
         const total = totalOS(o);
         if (total > 0) lancar({ type: "in", d: HOJE, desc: `${o.n} · ${TIPOS_OS[o.tipo][0]} · ${c.name}`, cat: o.tipo === "visita" ? "Visita técnica" : "Manutenção", who: o.contato || c.name, obra: null, pay: o.pay, v: total, paid: o.pago });
-      }, `${o.n} fechada${totalOS(o) || d.mao || mat.length ? " · " + brl(d.mao + mat.reduce((a, x) => a + x.qtd * x.v, 0)) + (d.pago ? " recebido" : " a receber no Financeiro") : ""}`).then(ok => { if (ok) osDetail(o) });
+      }, `${o.n} fechada${totalOS(o) || d.mao || mat.length ? " · " + brl(d.mao + mat.reduce((a, x) => a + x.qtd * x.v, 0)) + (d.pago ? " recebido" : " a receber no Financeiro") : ""}`).then(ok => { if (ok) osDetail(ordens.find(x => x.id === o.id) || o) });
     };
   }
 
   /* ---------- PDF da OS ---------- */
   function osPaper(o) {
     const c = clientById(o.cli), mat = o.mat, sub = mat.reduce((s, m) => s + m.qtd * m.v, 0);
-    const fotos = (l, t) => l.length ? `<div><div class="lbl">${t}</div><div class="pfotos">${l.slice(0, 8).map(u => `<img src="${esc(u)}" alt="">`).join("")}</div></div>` : "";
+    const fotos = (l, t) => l.length ? `<div><div class="lbl">${t}</div><div class="pfotos">${l.map(fotoUrl).filter(Boolean).slice(0, 8).map(u => `<img src="${esc(u)}" alt="">`).join("")}</div></div>` : "";
     return `<div class="paper">${paperHead("ORDEM DE SERVIÇO", [o.n, `Atendimento em ${fd(o.fechadaEm || o.d)}`])}
   <div class="pb">
    <div class="cols"><div><div class="lbl">Cliente</div><b>${esc(c.name)}</b>${o.contato && o.contato !== c.name ? "<br>" + esc(o.contato) : ""}${c.phone ? "<br>" + esc(c.phone) : ""}${o.local ? "<br>" + esc(o.local) : ""}</div><div><div class="lbl">Serviço</div><b>${TIPOS_OS[o.tipo][0]}</b><br>Técnico: ${esc(emp(o.tec).name)}<br>${fd(o.d)} às ${o.h}</div></div>
@@ -223,6 +235,25 @@ if (DEMO) (() => {
     const b = $("#nav button[data-p=os]"), base = me.role === "tec" ? minhas() : ordens, n = base.filter(o => ["Aberta", "Em andamento"].includes(o.status) && o.d <= HOJE).length;
     if (b && n) b.insertAdjacentHTML("beforeend", `<span class="nbadge info">${n}</span>`);
   };
+  // app real: carrega as OS depois do resto
+  const _reload = reload;
+  reload = async () => {
+    await _reload();
+    if (DEMO) return;
+    try {
+      const rows = await sel("ga_os", q => q.gte("data", addDays(HOJE, -730)));
+      ordens = rows.map(o => ({ id: o.id, n: numOS(o.id), cli: o.cliente_id, tipo: TIPOS_OS[o.tipo] ? o.tipo : "manut", local: o.local || "", problema: o.problema, contato: o.contato || "", tec: o.tecnico, d: o.data, h: o.hora, valor: +o.valor, status: o.status, feito: o.feito || "", mat: (o.materiais || []).map(m => ({ nome: m.nome, qtd: +m.qtd, v: +m.v, item: m.item || null })), mao: +o.mao, pay: o.forma || "", pago: o.pago, fotosAntes: o.fotos_antes || [], fotosDepois: o.fotos_depois || [], assin: o.assinatura || "", assinNome: o.assin_nome || "", fechadaEm: o.fechada_em, lanc: o.lancamento_id }));
+      osEst = me.role === "tec" ? (await live(sb.rpc("ga_estoque_lista")) || []).map(i => ({ ...i, qtd: +i.qtd, preco: +i.preco })) : [];
+      // links temporários das fotos das OS
+      const paths = [...new Set(ordens.flatMap(o => [...o.fotosAntes, ...o.fotosDepois]))].filter(p => !FOTO_URL[p]);
+      for (let i = 0; i < paths.length; i += 100) {
+        const { data } = await sb.storage.from(BUCKET).createSignedUrls(paths.slice(i, i + 100), 60 * 60 * 6);
+        (data || []).forEach(x => { if (x.signedUrl) FOTO_URL[x.path] = x.signedUrl });
+      }
+      falta008 = false;
+    } catch (e) { console.warn("008 ainda não rodou?", e); falta008 = true; ordens = []; osEst = [] }
+  };
+
   // as OS continuam entre um login e outro (dono abre, funcionário fecha), com os lançamentos delas
   let semeado = false;
   const _loadDemo = loadDemo;
