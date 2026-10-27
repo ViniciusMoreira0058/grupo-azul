@@ -178,11 +178,11 @@ function demoSeed(HOJE, addDays, addMonths) {
     const m = addMonths(HOJE.slice(0, 8) + "01", k), at = day => addDays(m, day - 1);
     add("out", at(5), "Contabilidade", "Impostos e taxas", "Contábil Silva & Associados", 850, { pay: "Boleto" });
     add("out", at(10), "Aluguel do depósito", "Aluguel e estrutura", "Imobiliária Lopes", 4200, { pay: "Boleto" });
-    add("out", at(15), "Parcela da van Fiorino", "Veículos e combustível", "Banco Itaú", 2350, { pay: "Boleto" });
-    add("out", at(26), "Combustível e pedágios do mês", "Veículos e combustível", "Posto Shell Faria Lima", 1250 + Math.round(rnd() * 700), { pay: "Cartão de débito" });
+    add("out", at(15), "Parcela da van Fiorino", "Veículos", "Banco Itaú", 2350, { pay: "Boleto" });
+    add("out", at(26), "Combustível e pedágios do mês", "Combustível", "Posto Shell Faria Lima", 1250 + Math.round(rnd() * 700), { pay: "Cartão de débito" });
     const prev = addMonths(m, -1).slice(0, 7), fat = lanc.filter(l => l.type === "in" && l.d.startsWith(prev)).reduce((s, l) => s + l.v, 0);
     if (fat) add("out", at(20), "Simples Nacional (DAS)", "Impostos e taxas", "Receita Federal", fat * .06, { pay: "Boleto" });
-    if (rnd() < .35) add("out", at(8 + Math.floor(rnd() * 15)), pick(["Ferramentas: termofusora e prensa PEX", "Manutenção da van", "Detector de vazamento por ultrassom", "Escadas e andaime"]), pick(["Ferramentas", "Veículos e combustível"]), pick(FORN), 900 + Math.round(rnd() * 3200), { pay: "Cartão de crédito" });
+    if (rnd() < .35) add("out", at(8 + Math.floor(rnd() * 15)), pick(["Ferramentas: termofusora e prensa PEX", "Manutenção da van", "Detector de vazamento por ultrassom", "Escadas e andaime"]), pick(["Ferramentas", "Veículos"]), pick(FORN), 900 + Math.round(rnd() * 3200), { pay: "Cartão de crédito" });
     for (let v = 0; v < 2 + Math.floor(rnd() * 3); v++) {
       const day = at(2 + Math.floor(rnd() * 25)), c = clients[Math.floor(rnd() * clients.length)];
       add("in", day, `${pick(["Visita técnica", "Caça-vazamento", "Manutenção preventiva", "Desentupimento"])} · ${c.name}`, pick(["Visita técnica", "Manutenção"]), c.contact, 380 + Math.round(rnd() * 14) * 60);

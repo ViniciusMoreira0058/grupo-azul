@@ -658,6 +658,14 @@ function printQuote(q) {
 
 /* ---------- Financeiro ---------- */
 const CATS = { in: ["Obra", "Manutenção", "Visita técnica", "Outras entradas"], out: ["Material", "Mão de obra", "Diárias da equipe", "Veículos e combustível", "Ferramentas", "Aluguel e estrutura", "Impostos e taxas", "Outras saídas"] };
+// categorias v2 (em teste na demonstração): Veículos e Combustível separados + categoria escrita pelo usuário
+const CAT_V2 = DEMO;
+if (CAT_V2) CATS.out.splice(CATS.out.indexOf("Veículos e combustível"), 1, "Veículos", "Combustível");
+// lista para escolher: as fixas, depois as que já foram escritas em algum lançamento, e "Outras" no fim
+function catsDe(t) {
+  const outras = CATS[t].find(c => c.startsWith("Outras")), extra = CAT_V2 ? [...new Set(lanc.filter(l => l.type === t && l.cat && !CATS[t].includes(l.cat)).map(l => l.cat))].sort((a, b) => a.localeCompare(b)) : [];
+  return [...CATS[t].filter(c => c !== outras), ...extra, outras];
+}
 const PAYS = ["PIX", "Transferência", "Dinheiro", "Boleto", "Cartão de crédito", "Cartão de débito"];
 const lateL = l => !l.paid && l.d < HOJE;
 const sitL = l => l.paid ? (l.type === "in" ? "Recebido" : "Pago") : lateL(l) ? "Atrasado" : (l.type === "in" ? "A receber" : "A pagar");
@@ -668,7 +676,7 @@ VIEWS.fin = () => {
   const paidM = lanc.filter(l => l.paid && inMonth(l)), inM = paidM.filter(l => l.type === "in").reduce((s, l) => s + l.v, 0), outM = paidM.filter(l => l.type === "out").reduce((s, l) => s + l.v, 0);
   const rec = lanc.filter(l => !l.paid && l.type === "in").reduce((s, l) => s + l.v, 0), pay = lanc.filter(l => !l.paid && l.type === "out").reduce((s, l) => s + l.v, 0);
   const saldo = (DEMO ? 25000 : 0) + lanc.filter(l => l.paid).reduce((s, l) => s + (l.type === "in" ? l.v : -l.v), 0);
-  const cats = CATS.out.map(c => [c, paidM.filter(l => l.type === "out" && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), cmax = Math.max(1, ...cats.map(c => c[1]));
+  const cats = catsDe("out").map(c => [c, paidM.filter(l => l.type === "out" && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), cmax = Math.max(1, ...cats.map(c => c[1]));
   const mName = FP ? FP.nome : mesNome(finMonth + "-01"), noP = FP ? "no período" : "no mês";
   $("#main").innerHTML = head("Financeiro", "Lance tudo o que entra e sai do caixa", FP ? "" : `<div class="month-nav"><button class="btn sm" id="fmPrev" aria-label="Mês anterior">‹</button><b>${mName}</b><button class="btn sm" id="fmNext" aria-label="Próximo mês">›</button></div>`) + `${FP ? periodBar("fin", VIEWS.fin) : ""}
  <div class="grid kpis" style="margin-bottom:14px">
@@ -700,7 +708,7 @@ function drawLancForm() {
  <div class="field"><label for="lfV">Valor</label><div class="money"><span>R$</span><input class="input num" id="lfV" inputmode="decimal" placeholder="0,00" value="${v.v ? (+v.v).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : ""}"></div></div>
  <div class="form-grid">
   <div class="field"><label for="lfDesc">Descrição</label><input class="input" id="lfDesc" placeholder="${t === "in" ? "Ex.: Parcela 1 · Residência Oliveira" : "Ex.: Tubos e conexões PPR"}" value="${esc(v.desc)}"></div>
-  <div class="field"><label for="lfCat">Categoria</label><select class="input" id="lfCat">${CATS[t].map(c => `<option ${c === v.cat ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+  <div class="field"><label for="lfCat">Categoria</label><select class="input" id="lfCat">${(() => { const l = catsDe(t); if (v.cat && !l.includes(v.cat)) l.splice(l.length - 1, 0, v.cat); return l })().map(c => `<option ${c === v.cat ? "selected" : ""}>${esc(c)}</option>`).join("")}${CAT_V2 ? `<option value="__nova">+ Outra categoria (escrever)</option>` : ""}</select><input class="input" id="lfCatNova" placeholder="Nome da nova categoria" maxlength="40" hidden style="margin-top:6px"></div>
   <div class="field"><label for="lfWho">${t === "in" ? "Cliente" : "Fornecedor / pessoa"}</label><input class="input" id="lfWho" list="lfWhoList" placeholder="${t === "in" ? "Nome do cliente" : "Loja, funcionário ou empresa"}" value="${esc(v.who)}"><datalist id="lfWhoList">${[...new Set(t === "in" ? clients.map(c => c.contact || c.name) : lanc.filter(l => l.type === "out").map(l => l.who))].filter(Boolean).map(x => `<option value="${esc(x)}">`).join("")}</datalist></div>
   <div class="field"><label for="lfObra">Obra (opcional)</label><select class="input" id="lfObra"><option value="">Nenhuma</option>${obras.map(o => `<option value="${o.id}" ${o.id === v.obra ? "selected" : ""}>${esc(clientById(o.client).name)} · ${esc(o.title)}</option>`).join("")}</select></div>
   <div class="field"><label for="lfPay">Forma de pagamento</label><select class="input" id="lfPay">${PAYS.map(p => `<option ${p === v.pay ? "selected" : ""}>${p}</option>`).join("")}</select></div>
@@ -714,6 +722,7 @@ function drawLancForm() {
  </div>
  <p class="s form-err" id="lfErr" hidden></p>`;
   $$("#lfType button").forEach(b => b.onclick = () => { finType = b.dataset.k; if (e) e._t = 1; drawLancForm() });
+  $("#lfCat").onchange = () => { const nova = $("#lfCat").value === "__nova"; $("#lfCatNova").hidden = !nova; if (nova) $("#lfCatNova").focus() };
   $("#lfSit").onchange = () => $("#lfDLabel").textContent = $("#lfSit").value === "1" ? "Data" : "Vencimento";
   $("#lfFile").onchange = () => { const f = $("#lfFile").files[0]; $("#lfFileName").textContent = f ? f.name : "Anexar comprovante" };
   if (e) $("#lfCancel").onclick = () => { delete e._t; editId = null; finType = "in"; drawLancForm() };
@@ -725,7 +734,11 @@ function drawLancForm() {
     if (!$("#lfDesc").value.trim()) return err("Escreva uma descrição para achar o lançamento depois.");
     if (!$("#lfD").value) return err("Informe a data.");
     const file = $("#lfFile").files[0];
-    const base = { type: finType, desc: $("#lfDesc").value.trim(), cat: $("#lfCat").value, who: $("#lfWho").value.trim(), obra: +$("#lfObra").value || null, pay: $("#lfPay").value, paid: $("#lfSit").value === "1" };
+    const catNova = $("#lfCat").value === "__nova" ? $("#lfCatNova").value.trim().replace(/\s+/g, " ") : "";
+    if ($("#lfCat").value === "__nova" && !catNova) return err("Escreva o nome da nova categoria.");
+    // escreveu uma que já existe (com outra maiúscula/minúscula): usa a existente
+    const catFinal = catNova ? (catsDe(finType).find(c => c.toLowerCase() === catNova.toLowerCase()) || catNova.charAt(0).toUpperCase() + catNova.slice(1)) : $("#lfCat").value;
+    const base = { type: finType, desc: $("#lfDesc").value.trim(), cat: catFinal, who: $("#lfWho").value.trim(), obra: +$("#lfObra").value || null, pay: $("#lfPay").value, paid: $("#lfSit").value === "1" };
     const row = l => ({ tipo: l.type, data: l.d, descricao: l.desc, categoria: l.cat, quem: l.who, obra_id: l.obra, forma: l.pay, valor: l.v, pago: l.paid, comprovante: l.file || null });
     const n = e ? 1 : +$("#lfParc").value, d0 = $("#lfD").value;
     act(async () => {
@@ -777,7 +790,7 @@ function viewRelOld() {
   const sumM = (k, t) => lanc.filter(l => l.paid && l.type === t && l.d.startsWith(k)).reduce((s, l) => s + l.v, 0);
   const IN = months.map(k => sumM(k, "in")), OUT = months.map(k => sumM(k, "out")), profit = IN.map((v, i) => v - OUT[i]);
   const outs = lanc.filter(l => l.paid && l.type === "out" && l.d >= first);
-  const cats = CATS.out.map(c => [c, outs.filter(l => l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), cmax = Math.max(1, ...cats.map(c => c[1]));
+  const cats = catsDe("out").map(c => [c, outs.filter(l => l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), cmax = Math.max(1, ...cats.map(c => c[1]));
   const withVal = clients.filter(c => c.value > 0), ticket = withVal.length ? withVal.reduce((s, c) => s + c.value, 0) / withVal.length : 0;
   const entregues = obras.filter(o => o.pct >= 100 && o.end >= first).length;
   const margem = c => { const ids = obras.filter(o => o.client === c.id).map(o => o.id), ls = lanc.filter(l => l.paid && ids.includes(l.obra)), i = ls.filter(l => l.type === "in").reduce((s, l) => s + l.v, 0), o = ls.filter(l => l.type === "out").reduce((s, l) => s + l.v, 0); return i ? `${Math.round((i - o) / i * 100)}%` : "—" };
@@ -943,7 +956,7 @@ function relFinanceiro(el) {
   const pend = lanc.filter(l => !l.paid && l.d <= ate), aRec = pend.filter(l => l.type === "in").reduce((s, l) => s + l.v, 0), aPag = pend.filter(l => l.type === "out").reduce((s, l) => s + l.v, 0);
   const meses = []; for (let k = de.slice(0, 7) + "-01"; k <= ate; k = addMonths(k, 1)) meses.push(k.slice(0, 7));
   const porMes = meses.map(k => ls.filter(l => l.d.startsWith(k)).reduce((s, l) => s + (l.type === "in" ? l.v : -l.v), 0));
-  const cat = t => { const cs = CATS[t].map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), mx = Math.max(1, ...cs.map(c => c[1])); return cs.map(c => `<div><div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span>${c[0]}</span><b class="num">${brl0(c[1])}</b></div><div class="bar ${t === "in" ? "bar-in" : ""}"><i style="width:${c[1] / mx * 100}%"></i></div></div>`).join("") || '<p class="s" style="margin:0">Nada no período.</p>' };
+  const cat = t => { const cs = catsDe(t).map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).sort((a, b) => b[1] - a[1]), mx = Math.max(1, ...cs.map(c => c[1])); return cs.map(c => `<div><div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span>${c[0]}</span><b class="num">${brl0(c[1])}</b></div><div class="bar ${t === "in" ? "bar-in" : ""}"><i style="width:${c[1] / mx * 100}%"></i></div></div>`).join("") || '<p class="s" style="margin:0">Nada no período.</p>' };
   const obraNome = id => { const o = obras.find(x => x.id === id); return o ? clientById(o.client).name : "" };
   el.innerHTML = `
  ${periodBar("rfin", () => relFinanceiro(el))}
@@ -964,7 +977,7 @@ function relFinanceiro(el) {
   $("#rfPdf").onclick = () => printPaper(finPaper(de, ate, ls, IN, OUT, obraNome), `Financeiro ${fd(de)} a ${fd(ate)}`.replace(/\//g, "-"));
 }
 function finPaper(de, ate, ls, IN, OUT, obraNome) {
-  const tab = t => CATS[t].map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).map(c => `<tr><td>${c[0]}</td><td class="r num">${brl(c[1])}</td></tr>`).join("");
+  const tab = t => catsDe(t).map(c => [c, ls.filter(l => l.type === t && l.cat === c).reduce((s, l) => s + l.v, 0)]).filter(c => c[1]).map(c => `<tr><td>${c[0]}</td><td class="r num">${brl(c[1])}</td></tr>`).join("");
   return `<div class="paper">
   ${paperHead("RELATÓRIO FINANCEIRO", [`${fd(de)} a ${fd(ate)}`, `Emitido em ${fd(HOJE)}`])}
   <div class="pb">
