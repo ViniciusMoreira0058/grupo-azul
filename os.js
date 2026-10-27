@@ -237,7 +237,7 @@
     if (b && n) b.insertAdjacentHTML("beforeend", `<span class="nbadge info">${n}</span>`);
   };
   // usado pelo botão Excluir (apagar.js)
-  window.gaOS = { doCliente: id => ordens.filter(o => o.cli === id).length, apagar: id => { ordens = ordens.filter(o => o.id !== id) }, tirarCliente: id => { ordens = ordens.filter(o => o.cli !== id) }, doTecnico: id => ordens.filter(o => o.tec === id && ["Aberta", "Em andamento"].includes(o.status)).length };
+  window.gaOS = { doCliente: id => ordens.filter(o => o.cli === id).length, apagar: id => { ordens = ordens.filter(o => o.id !== id) }, tirarCliente: id => { ordens = ordens.filter(o => o.cli !== id) }, doTecnico: id => ordens.filter(o => o.tec === id && ["Aberta", "Em andamento"].includes(o.status)).length, lista: () => ordens };
 
   // app real: carrega as OS depois do resto
   const _reload = reload;

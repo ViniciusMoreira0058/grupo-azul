@@ -301,7 +301,7 @@
   };
   // a Ordem de serviço (os.js, demonstração) usa o estoque
   window.gaEstoque = { itens: () => estoque, movsDe: id => movs.filter(m => m.item === id).length, apagar: id => { estoque = estoque.filter(i => i.id !== id); movs = movs.filter(m => m.item !== id) }, baixa: (id, q, obs) => { const i = estoque.find(x => x.id === id); if (!i) return; i.qtd = Math.max(0, i.qtd - q); movs.unshift({ id: nextId(movs), item: id, tipo: "saida", qtd: q, obra: null, d: HOJE, quem: me.id, obs }) } };
-  window.gaAgenda = { tirarCliente: id => eventos.forEach(e => { if (e.cli === id) e.cli = null }), tirarPessoa: id => eventos.forEach(e => { e.quem = e.quem.filter(x => x !== id) }), comPessoa: id => eventos.filter(e => e.quem.includes(id)) };
+  window.gaAgenda = { tirarCliente: id => eventos.forEach(e => { if (e.cli === id) e.cli = null }), tirarPessoa: id => eventos.forEach(e => { e.quem = e.quem.filter(x => x !== id) }), comPessoa: id => eventos.filter(e => e.quem.includes(id)), lista: () => eventos };
   function movRow(m) {
     const it = estoque.find(i => i.id === m.item) || { nome: "—", un: "" }, o = obras.find(x => x.id === m.obra);
     return `<div class="row"><span class="mov ${m.tipo}">${m.tipo === "entrada" ? "↓" : "↑"}</span><div class="grow"><div class="t">${esc(it.nome)}</div><div class="s">${fd(m.d)} · ${m.tipo === "entrada" ? esc(m.obs || "Entrada") : (o ? `para ${esc(clientById(o.client).name)}` : esc(m.obs || "Saída"))} · ${esc(emp(m.quem).name)}</div></div><b class="num ${m.tipo === "entrada" ? "up" : ""}">${m.tipo === "entrada" ? "+" : "−"}${qtdTxt(m.qtd, it.un)}</b></div>`;

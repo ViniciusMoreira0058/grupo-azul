@@ -3,7 +3,7 @@
    mudaram no servidor. Se mudaram, recarrega sozinho. Se a pessoa estiver no meio de um
    formulário, não recarrega: mostra uma faixa "Atualizar agora". */
 (() => {
-  const ARQS = ["index.html", "app.js", "novo.js", "os.js", "apagar.js", "demo.js", "atualizar.js"];
+  const ARQS = ["index.html", "app.js", "novo.js", "os.js", "apagar.js", "notif.js", "sw.js", "demo.js", "atualizar.js"];
   const marca = async () => (await Promise.all(ARQS.map(a =>
     fetch(a, { method: "HEAD", cache: "no-store" }).then(r => r.ok ? (r.headers.get("etag") || r.headers.get("last-modified") || "") : "").catch(() => "")
   ))).join("|");
