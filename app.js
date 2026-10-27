@@ -658,8 +658,9 @@ function printQuote(q) {
 
 /* ---------- Financeiro ---------- */
 const CATS = { in: ["Obra", "Manutenção", "Visita técnica", "Outras entradas"], out: ["Material", "Mão de obra", "Diárias da equipe", "Veículos e combustível", "Ferramentas", "Aluguel e estrutura", "Impostos e taxas", "Outras saídas"] };
-// categorias v2 (em teste na demonstração): Veículos e Combustível separados + categoria escrita pelo usuário
-const CAT_V2 = DEMO;
+// categorias v2: Veículos e Combustível separados + categoria escrita pelo usuário
+// (lançamentos antigos "Veículos e combustível" continuam aparecendo como uma categoria a mais)
+const CAT_V2 = true;
 if (CAT_V2) CATS.out.splice(CATS.out.indexOf("Veículos e combustível"), 1, "Veículos", "Combustível");
 // lista para escolher: as fixas, depois as que já foram escritas em algum lançamento, e "Outras" no fim
 function catsDe(t) {
