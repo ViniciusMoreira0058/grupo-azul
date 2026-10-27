@@ -32,6 +32,7 @@ O dono é cadastrado pelo `schema.sql` e não pode ser desativado nem rebaixado.
 11. **Etapas, Estoque, Agenda e Ferramentas**: rode `supabase/007_etapas_estoque_agenda.sql`. Até rodar, o app segue como antes e essas abas mostram o aviso.
 12. **Ordens de serviço**: rode `supabase/008_ordens_servico.sql` (depois do 007).
 13. **Equipe**: em **Funcionários**, cadastre cada pessoa com o e-mail dela e o perfil. Abra o cadastro e toque em **Enviar acesso pelo WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
+14. **Notificações no celular**: rode `supabase/009_notificacoes.sql`. Depois, no Supabase, em **Edge Functions → Deploy a new function → Via Editor**, crie a função `avisar` com o conteúdo de `supabase/functions/avisar/index.ts`. Em **Edge Functions → Secrets**, cadastre `VAPID_PUBLIC_KEY` (a mesma que está no `notif.js`) e `VAPID_PRIVATE_KEY`. Cada pessoa toca em **Ativar notificações** no menu do próprio celular (no iPhone, com o app instalado na tela de início).
 
 ## Segurança
 
